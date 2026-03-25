@@ -1,0 +1,299 @@
+<?xml version="1.0"?>
+<!--
+  Configuration pfSense — Règles de filtrage
+  Projet Fin de Module
+  ================================================
+  RÈGLES APPLIQUÉES :
+  1. WAN  → DMZ  : HTTP (80) + HTTPS (443) autorisés vers VM2 uniquement
+  2. WAN  → LAN  : TOUT BLOQUÉ
+  3. LAN  → WAN  : TOUT autorisé (VM3 peut accéder Internet)
+  4. LAN  → DMZ  : TOUT autorisé (VM3 peut joindre VM2)
+  5. DMZ  → LAN  : TOUT BLOQUÉ (VM2 ne peut pas joindre VM3 directement)
+  6. DMZ  → WAN  : HTTP/HTTPS autorisé (mises à jour VM2)
+-->
+<pfsense>
+  <version>21.7</version>
+
+  <!-- ═══════════════════════════════════════════
+       INTERFACES
+  ═══════════════════════════════════════════ -->
+  <interfaces>
+    <!-- WAN — Internet NAT -->
+    <wan>
+      <enable/>
+      <if>vtnet0</if>
+      <descr>WAN</descr>
+      <ipaddr>dhcp</ipaddr>
+      <blockpriv>1</blockpriv>
+      <blockbogons>1</blockbogons>
+    </wan>
+    <!-- DMZ — 192.168.100.0/24 -->
+    <dmz>
+      <enable/>
+      <if>vtnet1</if>
+      <descr>DMZ</descr>
+      <ipaddr>192.168.100.1</ipaddr>
+      <subnet>24</subnet>
+    </dmz>
+    <!-- LAN — 192.168.10.0/24 -->
+    <lan>
+      <enable/>
+      <if>vtnet2</if>
+      <descr>LAN</descr>
+      <ipaddr>192.168.10.1</ipaddr>
+      <subnet>24</subnet>
+    </lan>
+  </interfaces>
+
+  <!-- ═══════════════════════════════════════════
+       NAT — Redirection ports WAN → VM2
+  ═══════════════════════════════════════════ -->
+  <nat>
+    <rule>
+      <descr>NAT HTTP WAN vers VM2 Web</descr>
+      <interface>wan</interface>
+      <protocol>tcp</protocol>
+      <destination>
+        <network>wanip</network>
+        <port>80</port>
+      </destination>
+      <target>192.168.100.10</target>
+      <local-port>80</local-port>
+      <associated-rule-id>nat_http_wan_to_vm2</associated-rule-id>
+    </rule>
+    <rule>
+      <descr>NAT HTTPS WAN vers VM2 Web</descr>
+      <interface>wan</interface>
+      <protocol>tcp</protocol>
+      <destination>
+        <network>wanip</network>
+        <port>443</port>
+      </destination>
+      <target>192.168.100.10</target>
+      <local-port>443</local-port>
+      <associated-rule-id>nat_https_wan_to_vm2</associated-rule-id>
+    </rule>
+  </nat>
+
+  <!-- ═══════════════════════════════════════════
+       RÈGLES DE FILTRAGE
+  ═══════════════════════════════════════════ -->
+  <filter>
+
+    <!-- ── INTERFACE WAN ───────────────────────
+         Règle 1a : Autoriser HTTP depuis Internet → VM2 (DMZ)
+    ──────────────────────────────────────────── -->
+    <rule>
+      <id>wan_allow_http_to_vm2</id>
+      <type>pass</type>
+      <interface>wan</interface>
+      <ipprotocol>inet</ipprotocol>
+      <protocol>tcp</protocol>
+      <source>
+        <any/>
+      </source>
+      <destination>
+        <address>192.168.100.10</address>
+        <port>80</port>
+      </destination>
+      <descr>WAN → VM2 : HTTP autorisé</descr>
+      <tracker>101</tracker>
+    </rule>
+
+    <!-- Règle 1b : Autoriser HTTPS depuis Internet → VM2 (DMZ) -->
+    <rule>
+      <id>wan_allow_https_to_vm2</id>
+      <type>pass</type>
+      <interface>wan</interface>
+      <ipprotocol>inet</ipprotocol>
+      <protocol>tcp</protocol>
+      <source>
+        <any/>
+      </source>
+      <destination>
+        <address>192.168.100.10</address>
+        <port>443</port>
+      </destination>
+      <descr>WAN → VM2 : HTTPS autorisé</descr>
+      <tracker>102</tracker>
+    </rule>
+
+    <!-- Règle 1c : BLOQUER tout le reste depuis WAN vers LAN -->
+    <rule>
+      <id>wan_block_to_lan</id>
+      <type>block</type>
+      <interface>wan</interface>
+      <ipprotocol>inet</ipprotocol>
+      <protocol>any</protocol>
+      <source>
+        <any/>
+      </source>
+      <destination>
+        <network>192.168.10.0/24</network>
+      </destination>
+      <descr>WAN → LAN : BLOQUÉ (DB jamais exposée)</descr>
+      <tracker>103</tracker>
+    </rule>
+
+    <!-- Règle 1d : BLOQUER tout WAN → DMZ sauf HTTP/HTTPS -->
+    <rule>
+      <id>wan_block_other_to_dmz</id>
+      <type>block</type>
+      <interface>wan</interface>
+      <ipprotocol>inet</ipprotocol>
+      <protocol>any</protocol>
+      <source>
+        <any/>
+      </source>
+      <destination>
+        <network>192.168.100.0/24</network>
+      </destination>
+      <descr>WAN → DMZ : Tout sauf HTTP/HTTPS bloqué</descr>
+      <tracker>104</tracker>
+    </rule>
+
+    <!-- ── INTERFACE LAN ───────────────────────
+         Règle 2a : LAN → Internet AUTORISÉ
+    ──────────────────────────────────────────── -->
+    <rule>
+      <id>lan_allow_to_internet</id>
+      <type>pass</type>
+      <interface>lan</interface>
+      <ipprotocol>inet</ipprotocol>
+      <protocol>any</protocol>
+      <source>
+        <network>192.168.10.0/24</network>
+      </source>
+      <destination>
+        <!-- Tout sauf les réseaux internes -->
+        <not/>
+        <network>192.168.100.0/24</network>
+      </destination>
+      <descr>LAN → Internet : autorisé</descr>
+      <tracker>201</tracker>
+    </rule>
+
+    <!-- Règle 2b : LAN → DMZ AUTORISÉ -->
+    <rule>
+      <id>lan_allow_to_dmz</id>
+      <type>pass</type>
+      <interface>lan</interface>
+      <ipprotocol>inet</ipprotocol>
+      <protocol>any</protocol>
+      <source>
+        <network>192.168.10.0/24</network>
+      </source>
+      <destination>
+        <network>192.168.100.0/24</network>
+      </destination>
+      <descr>LAN → DMZ : autorisé</descr>
+      <tracker>202</tracker>
+    </rule>
+
+    <!-- ── INTERFACE DMZ ───────────────────────
+         Règle 3a : DMZ → LAN BLOQUÉ
+    ──────────────────────────────────────────── -->
+    <rule>
+      <id>dmz_block_to_lan</id>
+      <type>block</type>
+      <interface>dmz</interface>
+      <ipprotocol>inet</ipprotocol>
+      <protocol>any</protocol>
+      <source>
+        <network>192.168.100.0/24</network>
+      </source>
+      <destination>
+        <network>192.168.10.0/24</network>
+      </destination>
+      <descr>DMZ → LAN : BLOQUÉ (VM2 ne peut pas joindre VM3 directement)</descr>
+      <tracker>301</tracker>
+    </rule>
+
+    <!-- Règle 3b : DMZ → Internet autorisé (mises à jour VM2) -->
+    <rule>
+      <id>dmz_allow_to_internet</id>
+      <type>pass</type>
+      <interface>dmz</interface>
+      <ipprotocol>inet</ipprotocol>
+      <protocol>tcp</protocol>
+      <source>
+        <network>192.168.100.0/24</network>
+      </source>
+      <destination>
+        <any/>
+        <port>80</port>
+      </destination>
+      <descr>DMZ → Internet HTTP : autorisé (mises à jour)</descr>
+      <tracker>302</tracker>
+    </rule>
+    <rule>
+      <id>dmz_allow_https_to_internet</id>
+      <type>pass</type>
+      <interface>dmz</interface>
+      <ipprotocol>inet</ipprotocol>
+      <protocol>tcp</protocol>
+      <source>
+        <network>192.168.100.0/24</network>
+      </source>
+      <destination>
+        <any/>
+        <port>443</port>
+      </destination>
+      <descr>DMZ → Internet HTTPS : autorisé (mises à jour)</descr>
+      <tracker>303</tracker>
+    </rule>
+
+    <!-- Règle 3c : BLOQUER tout autre flux DMZ → LAN/WAN -->
+    <rule>
+      <id>dmz_block_default</id>
+      <type>block</type>
+      <interface>dmz</interface>
+      <ipprotocol>inet</ipprotocol>
+      <protocol>any</protocol>
+      <source>
+        <any/>
+      </source>
+      <destination>
+        <any/>
+      </destination>
+      <descr>DMZ → * : Tout le reste bloqué (règle par défaut)</descr>
+      <tracker>304</tracker>
+    </rule>
+
+  </filter>
+
+  <!-- ═══════════════════════════════════════════
+       DHCP — Attribution IPs fixes aux VMs
+  ═══════════════════════════════════════════ -->
+  <dhcpd>
+    <dmz>
+      <enable/>
+      <range>
+        <from>192.168.100.100</from>
+        <to>192.168.100.200</to>
+      </range>
+      <!-- IP fixe pour VM2 -->
+      <staticmap>
+        <mac>auto</mac>
+        <ipaddr>192.168.100.10</ipaddr>
+        <hostname>vm2-web</hostname>
+        <descr>VM2 Serveur Web</descr>
+      </staticmap>
+    </dmz>
+    <lan>
+      <enable/>
+      <range>
+        <from>192.168.10.100</from>
+        <to>192.168.10.200</to>
+      </range>
+      <!-- IP fixe pour VM3 -->
+      <staticmap>
+        <mac>auto</mac>
+        <ipaddr>192.168.10.20</ipaddr>
+        <hostname>vm3-db</hostname>
+        <descr>VM3 Serveur DB MySQL</descr>
+      </staticmap>
+    </lan>
+  </dhcpd>
+
+</pfsense>

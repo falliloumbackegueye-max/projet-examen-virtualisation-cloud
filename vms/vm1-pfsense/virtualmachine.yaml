@@ -32,6 +32,10 @@ spec:
                 bus: sata
                 readonly: true
               bootOrder: 2
+            # ConfigMap contenant le script de configuration automatique
+            - name: pfsense-config
+              disk:
+                bus: virtio
           interfaces:
             # WAN — accès Internet via le réseau pod OpenShift (NAT)
             - name: wan
@@ -101,3 +105,23 @@ spec:
         storage: 5Gi
     accessModes:
       - ReadWriteOnce
+
+---
+# ConfigMap — résumé des règles + script de config pfSense
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pfsense-firewall-config
+  namespace: projet-fin-module
+data:
+  rules-summary.txt: |
+    RÈGLES DE FILTRAGE PFENSE — PROJET FIN DE MODULE
+    =================================================
+    WAN  → VM2 (DMZ) port 80/443  : AUTORISÉ  (accès web depuis Internet)
+    WAN  → LAN                    : BLOQUÉ    (DB jamais exposée)
+    WAN  → DMZ (autres ports)     : BLOQUÉ
+    LAN  → Internet               : AUTORISÉ  (VM3 peut faire des mises à jour)
+    LAN  → DMZ                    : AUTORISÉ  (VM3 peut joindre VM2)
+    DMZ  → LAN                    : BLOQUÉ    (VM2 ne peut pas accéder VM3 directement)
+    DMZ  → Internet (80/443)      : AUTORISÉ  (mises à jour VM2)
+    DMZ  → * (autres)             : BLOQUÉ
