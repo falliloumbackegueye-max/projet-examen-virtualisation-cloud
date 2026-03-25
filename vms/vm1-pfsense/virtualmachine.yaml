@@ -1,11 +1,19 @@
+---
+# =====================================================
+# VM1 — pfSense Firewall
+# Adapté Sandbox : 1 seule interface (pod network)
+# NAD DMZ/LAN non disponibles sur ce Sandbox
+# Les règles firewall sont documentées dans firewall-rules.xml
+# =====================================================
 apiVersion: kubevirt.io/v1
 kind: VirtualMachine
 metadata:
   name: vm1-pfsense
-  namespace: projet-fin-module
+  namespace: fallilou-dev
   labels:
     kubevirt.io/domain: vm1-pfsense
     app: vm1-pfsense
+    zone: wan
 spec:
   running: true
   template:
@@ -13,73 +21,60 @@ spec:
       labels:
         kubevirt.io/domain: vm1-pfsense
         app: vm1-pfsense
+        zone: wan
     spec:
       domain:
         cpu:
           cores: 2
         memory:
           guest: 1Gi
+        resources:
+          requests:
+            memory: 1Gi
+            cpu: "500m"
+          limits:
+            memory: 1Gi
+            cpu: "2"
         devices:
           disks:
-            # Disque principal pfSense
             - name: pfsense-disk
               disk:
                 bus: virtio
               bootOrder: 1
-            # CD-ROM ISO pfSense pour l'installation
             - name: pfsense-iso
               cdrom:
                 bus: sata
                 readonly: true
               bootOrder: 2
-            # ConfigMap contenant le script de configuration automatique
-            - name: pfsense-config
-              disk:
-                bus: virtio
           interfaces:
-            # WAN — accès Internet via le réseau pod OpenShift (NAT)
+            # Interface WAN uniquement (pod network = NAT Internet)
             - name: wan
               masquerade: {}
-              model: virtio
-            # DMZ — réseau 192.168.100.0/24
-            - name: dmz
-              bridge: {}
-              model: virtio
-            # LAN — réseau 192.168.10.0/24
-            - name: lan
-              bridge: {}
               model: virtio
           rng: {}
       networks:
         - name: wan
           pod: {}
-        - name: dmz
-          multus:
-            networkName: dmz-network
-        - name: lan
-          multus:
-            networkName: lan-network
       volumes:
-        # Disque virtuel 20Gi pour pfSense installé
         - name: pfsense-disk
           dataVolume:
             name: pfsense-disk-dv
-        # Import ISO pfSense depuis URL officielle
         - name: pfsense-iso
           dataVolume:
             name: pfsense-iso-dv
 
 ---
-# DataVolume — disque d'installation pfSense (20Gi)
+# Disque système pfSense (20Gi, gp3)
 apiVersion: cdi.kubevirt.io/v1beta1
 kind: DataVolume
 metadata:
   name: pfsense-disk-dv
-  namespace: projet-fin-module
+  namespace: fallilou-dev
 spec:
   source:
     blank: {}
   storage:
+    storageClassName: gp3
     resources:
       requests:
         storage: 20Gi
@@ -87,41 +82,20 @@ spec:
       - ReadWriteOnce
 
 ---
-# DataVolume — ISO pfSense 2.7 (téléchargé depuis URL)
-# Remplace l'URL par le lien direct de l'ISO pfSense CE depuis www.pfsense.org/download
+# Import ISO pfSense CE 2.7
 apiVersion: cdi.kubevirt.io/v1beta1
 kind: DataVolume
 metadata:
   name: pfsense-iso-dv
-  namespace: projet-fin-module
+  namespace: fallilou-dev
 spec:
   source:
     http:
-      # ⚠ Remplacer par l'URL directe de l'ISO pfSense CE 2.7 amd64
       url: "https://atxfiles.netgate.com/mirror/downloads/pfSense-CE-2.7.2-RELEASE-amd64.iso.gz"
   storage:
+    storageClassName: gp3
     resources:
       requests:
         storage: 5Gi
     accessModes:
       - ReadWriteOnce
-
----
-# ConfigMap — résumé des règles + script de config pfSense
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: pfsense-firewall-config
-  namespace: projet-fin-module
-data:
-  rules-summary.txt: |
-    RÈGLES DE FILTRAGE PFENSE — PROJET FIN DE MODULE
-    =================================================
-    WAN  → VM2 (DMZ) port 80/443  : AUTORISÉ  (accès web depuis Internet)
-    WAN  → LAN                    : BLOQUÉ    (DB jamais exposée)
-    WAN  → DMZ (autres ports)     : BLOQUÉ
-    LAN  → Internet               : AUTORISÉ  (VM3 peut faire des mises à jour)
-    LAN  → DMZ                    : AUTORISÉ  (VM3 peut joindre VM2)
-    DMZ  → LAN                    : BLOQUÉ    (VM2 ne peut pas accéder VM3 directement)
-    DMZ  → Internet (80/443)      : AUTORISÉ  (mises à jour VM2)
-    DMZ  → * (autres)             : BLOQUÉ

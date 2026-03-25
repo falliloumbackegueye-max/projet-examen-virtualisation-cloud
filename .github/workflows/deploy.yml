@@ -1,0 +1,100 @@
+name: Deploy to OpenShift Sandbox (fallilou-dev)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  NAMESPACE: fallilou-dev
+
+jobs:
+  deploy:
+    name: Deploy VMs
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install oc CLI
+        uses: redhat-actions/openshift-tools-installer@v1
+        with:
+          oc: latest
+
+      - name: Login to OpenShift Sandbox
+        run: |
+          oc login \
+            --token="${{ secrets.OC_TOKEN }}" \
+            --server="${{ secrets.OC_SERVER }}" \
+            --insecure-skip-tls-verify=true
+          echo "Connecté en tant que : $(oc whoami)"
+          echo "Namespace : $(oc project -q)"
+
+      - name: Vérifier KubeVirt disponible
+        run: |
+          if oc api-resources | grep -q "virtualmachines"; then
+            echo "✅ KubeVirt disponible"
+          else
+            echo "❌ KubeVirt non disponible"
+            exit 1
+          fi
+
+      - name: Appliquer NetworkPolicies
+        run: |
+          oc apply -f network/networkpolicy.yaml -n ${{ env.NAMESPACE }}
+          echo "✅ NetworkPolicies appliquées"
+
+      - name: Déployer VM3 — DB (en premier)
+        run: |
+          oc apply -f vms/vm3-db/pvc.yaml        -n ${{ env.NAMESPACE }}
+          oc apply -f vms/vm3-db/virtualmachine.yaml -n ${{ env.NAMESPACE }}
+          echo "✅ VM3 DB appliquée"
+
+      - name: Déployer VM2 — Web
+        run: |
+          oc apply -f vms/vm2-web/virtualmachine.yaml -n ${{ env.NAMESPACE }}
+          echo "✅ VM2 Web appliquée"
+
+      - name: Déployer VM1 — pfSense
+        run: |
+          oc apply -f vms/vm1-pfsense/virtualmachine.yaml -n ${{ env.NAMESPACE }}
+          echo "✅ VM1 pfSense appliquée"
+
+      - name: Attendre les DataVolumes
+        run: |
+          echo "Attente import images Ubuntu + pfSense (peut prendre 5-10 min)..."
+          for DV in vm2-ubuntu-dv vm3-ubuntu-dv pfsense-disk-dv pfsense-iso-dv; do
+            echo "  Attente de $DV..."
+            timeout 600 bash -c "
+              until oc get dv $DV -n ${{ env.NAMESPACE }} \
+                -o jsonpath='{.status.phase}' 2>/dev/null \
+                | grep -q 'Succeeded'; do
+                PHASE=\$(oc get dv $DV -n ${{ env.NAMESPACE }} \
+                  -o jsonpath='{.status.phase}' 2>/dev/null || echo 'Pending')
+                echo \"    $DV : \$PHASE\"
+                sleep 20
+              done
+            " && echo "  ✅ $DV prêt" || echo "  ⚠ Timeout $DV"
+          done
+
+      - name: Résumé final
+        run: |
+          echo ""
+          echo "══════════════════════════════════"
+          echo "  DÉPLOIEMENT TERMINÉ"
+          echo "  Namespace : ${{ env.NAMESPACE }}"
+          echo "══════════════════════════════════"
+          echo ""
+          echo "── VirtualMachines ──"
+          oc get vm -n ${{ env.NAMESPACE }} \
+            -o custom-columns="NOM:.metadata.name,STATUT:.status.printableStatus,PRÊTE:.status.ready"
+          echo ""
+          echo "── DataVolumes ──"
+          oc get dv -n ${{ env.NAMESPACE }} \
+            -o custom-columns="NOM:.metadata.name,PHASE:.status.phase"
+          echo ""
+          echo "── NetworkPolicies ──"
+          oc get networkpolicy -n ${{ env.NAMESPACE }} \
+            -o custom-columns="NOM:.metadata.name"

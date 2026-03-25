@@ -2,10 +2,12 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: vm3-mysql-data
-  namespace: projet-fin-module
+  namespace: fallilou-dev
   labels:
     app: vm3-db
+    zone: lan
 spec:
+  storageClassName: gp3
   accessModes:
     - ReadWriteOnce
   resources:
