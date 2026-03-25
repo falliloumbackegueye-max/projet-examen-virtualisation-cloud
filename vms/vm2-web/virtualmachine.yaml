@@ -1,0 +1,223 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: vm2-web
+  namespace: projet-fin-module
+  labels:
+    kubevirt.io/domain: vm2-web
+    app: vm2-web
+spec:
+  running: true
+  template:
+    metadata:
+      labels:
+        kubevirt.io/domain: vm2-web
+        app: vm2-web
+    spec:
+      domain:
+        cpu:
+          cores: 2
+        memory:
+          guest: 2Gi
+        devices:
+          disks:
+            - name: ubuntu-disk
+              disk:
+                bus: virtio
+              bootOrder: 1
+            - name: cloudinit-disk
+              disk:
+                bus: virtio
+          interfaces:
+            # Interface DMZ (192.168.100.0/24)
+            - name: dmz
+              bridge: {}
+              model: virtio
+          rng: {}
+      networks:
+        - name: dmz
+          multus:
+            networkName: dmz-network
+      volumes:
+        - name: ubuntu-disk
+          dataVolume:
+            name: vm2-ubuntu-dv
+        - name: cloudinit-disk
+          cloudInitNoCloud:
+            userData: |
+              #cloud-config
+              hostname: vm2-web
+              fqdn: vm2-web.projet.local
+              locale: fr_FR.UTF-8
+              timezone: Africa/Dakar
+
+              users:
+                - name: ubuntu
+                  groups: sudo
+                  sudo: ALL=(ALL) NOPASSWD:ALL
+                  shell: /bin/bash
+                  lock_passwd: false
+                  passwd: $6$rounds=4096$sel$hashed_password_here
+                  # Remplacer par le hash de ton mot de passe :
+                  # openssl passwd -6 "TonMotDePasse"
+
+              ssh_pwauth: true
+
+              package_update: true
+              package_upgrade: true
+              packages:
+                - nginx
+                - nodejs
+                - npm
+                - git
+                - curl
+                - mysql-client
+                - ufw
+
+              write_files:
+                # Application Node.js Express
+                - path: /opt/app/index.js
+                  permissions: '0644'
+                  content: |
+                    const express = require('express');
+                    const mysql   = require('mysql2/promise');
+
+                    const app  = express();
+                    const PORT = process.env.PORT || 3000;
+
+                    const dbConfig = {
+                      host:     process.env.DB_HOST     || 'vm3-db',
+                      port:     process.env.DB_PORT     || 3306,
+                      user:     process.env.DB_USER     || 'appuser',
+                      password: process.env.DB_PASSWORD || 'AppPassword123!',
+                      database: process.env.DB_NAME     || 'appdb',
+                    };
+
+                    app.get('/', async (req, res) => {
+                      try {
+                        const conn = await mysql.createConnection(dbConfig);
+                        const [rows] = await conn.execute('SELECT NOW() AS time, VERSION() AS version');
+                        await conn.end();
+                        res.json({
+                          status:   'OK',
+                          server:   'VM2 - Nginx + Node.js',
+                          database: rows[0],
+                        });
+                      } catch (err) {
+                        res.status(500).json({ status: 'DB_ERROR', error: err.message });
+                      }
+                    });
+
+                    app.get('/health', (req, res) => res.json({ status: 'UP' }));
+
+                    app.listen(PORT, () => console.log(`App running on port ${PORT}`));
+
+                # package.json
+                - path: /opt/app/package.json
+                  permissions: '0644'
+                  content: |
+                    {
+                      "name": "projet-fin-module-app",
+                      "version": "1.0.0",
+                      "main": "index.js",
+                      "scripts": { "start": "node index.js" },
+                      "dependencies": {
+                        "express": "^4.18.2",
+                        "mysql2": "^3.6.0"
+                      }
+                    }
+
+                # Variables d'environnement
+                - path: /opt/app/.env
+                  permissions: '0600'
+                  content: |
+                    DB_HOST=192.168.10.20
+                    DB_PORT=3306
+                    DB_USER=appuser
+                    DB_PASSWORD=AppPassword123!
+                    DB_NAME=appdb
+                    PORT=3000
+
+                # Systemd service pour Node.js
+                - path: /etc/systemd/system/nodeapp.service
+                  permissions: '0644'
+                  content: |
+                    [Unit]
+                    Description=Node.js Application
+                    After=network.target
+
+                    [Service]
+                    Type=simple
+                    User=ubuntu
+                    WorkingDirectory=/opt/app
+                    EnvironmentFile=/opt/app/.env
+                    ExecStart=/usr/bin/node /opt/app/index.js
+                    Restart=on-failure
+                    RestartSec=5
+
+                    [Install]
+                    WantedBy=multi-user.target
+
+                # Config Nginx reverse proxy
+                - path: /etc/nginx/sites-available/nodeapp
+                  permissions: '0644'
+                  content: |
+                    server {
+                        listen 80;
+                        server_name _;
+
+                        location / {
+                            proxy_pass         http://127.0.0.1:3000;
+                            proxy_http_version 1.1;
+                            proxy_set_header   Upgrade $http_upgrade;
+                            proxy_set_header   Connection 'upgrade';
+                            proxy_set_header   Host $host;
+                            proxy_cache_bypass $http_upgrade;
+                        }
+
+                        location /health {
+                            proxy_pass http://127.0.0.1:3000/health;
+                        }
+                    }
+
+              runcmd:
+                # Installation des dépendances Node.js
+                - cd /opt/app && npm install
+                - chown -R ubuntu:ubuntu /opt/app
+
+                # Configuration Nginx
+                - ln -sf /etc/nginx/sites-available/nodeapp /etc/nginx/sites-enabled/nodeapp
+                - rm -f /etc/nginx/sites-enabled/default
+                - nginx -t && systemctl restart nginx
+
+                # Activation du service Node.js
+                - systemctl daemon-reload
+                - systemctl enable nodeapp
+                - systemctl start nodeapp
+
+                # Firewall UFW
+                - ufw allow 22/tcp
+                - ufw allow 80/tcp
+                - ufw allow 443/tcp
+                - ufw allow 3000/tcp
+                - ufw --force enable
+
+              final_message: "VM2 Web prête ! Nginx + Node.js démarrés."
+
+---
+# DataVolume — Image Ubuntu 22.04 Cloud (20Gi)
+apiVersion: cdi.kubevirt.io/v1beta1
+kind: DataVolume
+metadata:
+  name: vm2-ubuntu-dv
+  namespace: projet-fin-module
+spec:
+  source:
+    http:
+      url: "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
+  storage:
+    resources:
+      requests:
+        storage: 20Gi
+    accessModes:
+      - ReadWriteOnce

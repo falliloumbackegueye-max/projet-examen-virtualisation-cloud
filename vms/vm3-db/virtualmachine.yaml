@@ -1,0 +1,193 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: vm3-db
+  namespace: projet-fin-module
+  labels:
+    kubevirt.io/domain: vm3-db
+    app: vm3-db
+spec:
+  running: true
+  template:
+    metadata:
+      labels:
+        kubevirt.io/domain: vm3-db
+        app: vm3-db
+    spec:
+      domain:
+        cpu:
+          cores: 2
+        memory:
+          guest: 2Gi
+        devices:
+          disks:
+            - name: ubuntu-disk
+              disk:
+                bus: virtio
+              bootOrder: 1
+            - name: mysql-data-disk
+              disk:
+                bus: virtio
+            - name: cloudinit-disk
+              disk:
+                bus: virtio
+          interfaces:
+            # LAN uniquement — jamais exposé sur Internet
+            - name: lan
+              bridge: {}
+              model: virtio
+          rng: {}
+      networks:
+        - name: lan
+          multus:
+            networkName: lan-network
+      volumes:
+        - name: ubuntu-disk
+          dataVolume:
+            name: vm3-ubuntu-dv
+        # Disque dédié aux données MySQL (PVC séparé)
+        - name: mysql-data-disk
+          persistentVolumeClaim:
+            claimName: vm3-mysql-data
+        - name: cloudinit-disk
+          cloudInitNoCloud:
+            userData: |
+              #cloud-config
+              hostname: vm3-db
+              fqdn: vm3-db.projet.local
+              locale: fr_FR.UTF-8
+              timezone: Africa/Dakar
+
+              users:
+                - name: ubuntu
+                  groups: sudo
+                  sudo: ALL=(ALL) NOPASSWD:ALL
+                  shell: /bin/bash
+                  lock_passwd: false
+                  passwd: $6$rounds=4096$sel$hashed_password_here
+                  # Remplacer par : openssl passwd -6 "TonMotDePasse"
+
+              ssh_pwauth: true
+
+              package_update: true
+              package_upgrade: true
+              packages:
+                - mysql-server
+                - mysql-client
+                - ufw
+                - curl
+
+              write_files:
+                # Configuration MySQL — écoute sur toutes les interfaces
+                - path: /etc/mysql/mysql.conf.d/99-projet.cnf
+                  permissions: '0644'
+                  content: |
+                    [mysqld]
+                    bind-address            = 0.0.0.0
+                    mysqlx-bind-address     = 0.0.0.0
+                    max_connections         = 100
+                    innodb_buffer_pool_size = 256M
+                    slow_query_log          = 1
+                    slow_query_log_file     = /var/log/mysql/slow.log
+                    long_query_time         = 2
+
+                # Script d'initialisation MySQL
+                - path: /opt/mysql-init.sql
+                  permissions: '0600'
+                  content: |
+                    -- Sécurisation de base
+                    DELETE FROM mysql.user WHERE User='';
+                    DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
+                    DROP DATABASE IF EXISTS test;
+                    DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
+
+                    -- Mot de passe root
+                    ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'RootPassword123!';
+
+                    -- Création de la base de données
+                    CREATE DATABASE IF NOT EXISTS appdb
+                      CHARACTER SET utf8mb4
+                      COLLATE utf8mb4_unicode_ci;
+
+                    -- Création de l'utilisateur applicatif
+                    -- Accès depuis tout le réseau LAN 192.168.10.x (VM2)
+                    CREATE USER IF NOT EXISTS 'appuser'@'192.168.10.%'
+                      IDENTIFIED WITH mysql_native_password BY 'AppPassword123!';
+
+                    GRANT ALL PRIVILEGES ON appdb.* TO 'appuser'@'192.168.10.%';
+
+                    -- Table de test
+                    USE appdb;
+                    CREATE TABLE IF NOT EXISTS test_connexion (
+                      id         INT AUTO_INCREMENT PRIMARY KEY,
+                      message    VARCHAR(255) NOT NULL,
+                      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    );
+                    INSERT INTO test_connexion (message) VALUES ('Connexion VM2 → VM3 OK !');
+
+                    FLUSH PRIVILEGES;
+
+                # Script de préparation du disque de données MySQL
+                - path: /opt/setup-mysql-disk.sh
+                  permissions: '0755'
+                  content: |
+                    #!/bin/bash
+                    # Monte le disque dédié /dev/vdb sur /var/lib/mysql
+                    DISK="/dev/vdb"
+                    MOUNT="/var/lib/mysql"
+
+                    if ! blkid $DISK; then
+                      mkfs.ext4 -F $DISK
+                    fi
+
+                    UUID=$(blkid -s UUID -o value $DISK)
+                    if ! grep -q "$UUID" /etc/fstab; then
+                      echo "UUID=$UUID $MOUNT ext4 defaults,nofail 0 2" >> /etc/fstab
+                    fi
+
+                    systemctl stop mysql
+                    mount $DISK $MOUNT
+                    chown -R mysql:mysql $MOUNT
+                    systemctl start mysql
+
+              runcmd:
+                # Préparation du disque de données
+                - /opt/setup-mysql-disk.sh
+
+                # Démarrage et sécurisation MySQL
+                - systemctl start mysql
+                - mysql -u root < /opt/mysql-init.sql
+                - rm -f /opt/mysql-init.sql
+
+                # Redémarrage avec la nouvelle config
+                - systemctl restart mysql
+                - systemctl enable mysql
+
+                # Firewall — n'autorise MySQL que depuis le réseau LAN
+                - ufw allow 22/tcp
+                - ufw allow from 192.168.10.0/24 to any port 3306
+                - ufw deny 3306
+                - ufw --force enable
+
+                # Vérification finale
+                - mysql -u root -pRootPassword123! -e "SHOW DATABASES; SELECT User,Host FROM mysql.user;"
+
+              final_message: "VM3 DB prête ! MySQL opérationnel sur le réseau LAN."
+
+---
+# DataVolume — Image Ubuntu 22.04 Cloud (20Gi)
+apiVersion: cdi.kubevirt.io/v1beta1
+kind: DataVolume
+metadata:
+  name: vm3-ubuntu-dv
+  namespace: projet-fin-module
+spec:
+  source:
+    http:
+      url: "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
+  storage:
+    resources:
+      requests:
+        storage: 20Gi
+    accessModes:
+      - ReadWriteOnce
