@@ -18,6 +18,22 @@ spec:
         zone: lan
         kubevirt.io/domain: vm3-db
     spec:
+      initContainers:
+        - name: network-setup
+          image: fedora:39
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Configuration réseau LAN vm3-db..."
+              ip link add lan0 type dummy 2>/dev/null || true
+              ip addr add 192.168.10.20/24 dev lan0 2>/dev/null || true
+              ip link set lan0 up 2>/dev/null || true
+              ip route add 192.168.100.0/24 via 192.168.10.1 dev lan0 2>/dev/null || true
+              echo "✅ Interface LAN configurée : 192.168.10.20"
+              ip addr show
+          securityContext:
+            capabilities:
+              add: ["NET_ADMIN"]
       containers:
         - name: mysql
           image: mysql:8.0
