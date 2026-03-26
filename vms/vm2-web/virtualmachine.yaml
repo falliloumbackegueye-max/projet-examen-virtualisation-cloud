@@ -206,21 +206,3 @@ spec:
 
               final_message: "VM2 Web prete ! Nginx + Node.js demarres."
 
----
-# DataVolume Ubuntu 22.04 — gp3, 20Gi
-apiVersion: cdi.kubevirt.io/v1beta1
-kind: DataVolume
-metadata:
-  name: vm2-ubuntu-dv
-  namespace: fallilou-dev
-spec:
-  source:
-    http:
-      url: "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
-  storage:
-    storageClassName: gp3
-    resources:
-      requests:
-        storage: 20Gi
-    accessModes:
-      - ReadWriteOnce
