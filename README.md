@@ -131,3 +131,4 @@ oc get net-attach-def -n projet-fin-module
 rebuild alx 26 mar 2026 01:33:36 GMT
 fix machine type alx 26 mar 2026 02:30:21 GMT
 trigger alx 26 mar 2026 02:45:19 GMT
+trigger fedora images alx 26 mar 2026 03:02:14 GMT
