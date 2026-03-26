@@ -1,22 +1,21 @@
 apiVersion: kubevirt.io/v1
 kind: VirtualMachine
 metadata:
-  name: vm2-web
+  name: vm1-pfsense
   namespace: fallilou-dev
   labels:
-    kubevirt.io/domain: vm2-web
-    app: vm2-web
+    kubevirt.io/domain: vm1-pfsense
+    app: vm1-pfsense
 spec:
   runStrategy: Manual
   dataVolumeTemplates:
     - apiVersion: cdi.kubevirt.io/v1beta1
       kind: DataVolume
       metadata:
-        name: vm2-web-rootdisk
+        name: vm1-pfsense-rootdisk
       spec:
         source:
-          http:
-            url: "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
+          blank: {}
         storage:
           storageClassName: gp3
           resources:
@@ -27,8 +26,8 @@ spec:
   template:
     metadata:
       labels:
-        kubevirt.io/domain: vm2-web
-        app: vm2-web
+        kubevirt.io/domain: vm1-pfsense
+        app: vm1-pfsense
     spec:
       domain:
         cpu:
@@ -36,7 +35,7 @@ spec:
           sockets: 1
           threads: 1
         memory:
-          guest: 2Gi
+          guest: 1Gi
         devices:
           disks:
             - name: rootdisk
@@ -65,27 +64,12 @@ spec:
       volumes:
         - name: rootdisk
           dataVolume:
-            name: vm2-web-rootdisk
+            name: vm1-pfsense-rootdisk
         - name: cloudinitdisk
           cloudInitNoCloud:
             userData: |
               #cloud-config
-              hostname: vm2-web
-              user: ubuntu
-              password: Ubuntu2024x
+              hostname: vm1-pfsense
+              user: admin
+              password: pfsense
               chpasswd: { expire: False }
-              ssh_pwauth: true
-              package_update: true
-              packages:
-                - nginx
-                - nodejs
-                - npm
-                - git
-                - curl
-                - mysql-client
-              runcmd:
-                - mkdir -p /opt/app
-                - echo '{"name":"app","version":"1.0.0","dependencies":{"express":"^4.18.2","mysql2":"^3.6.0"}}' > /opt/app/package.json
-                - cd /opt/app && npm install
-                - chown -R ubuntu:ubuntu /opt/app
-                - systemctl restart nginx

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: vm3-db-svc
+  namespace: fallilou-dev
+  labels:
+    app: vm3-db
+spec:
+  selector:
+    kubevirt.io/domain: vm3-db
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: 3306
+  type: ClusterIP

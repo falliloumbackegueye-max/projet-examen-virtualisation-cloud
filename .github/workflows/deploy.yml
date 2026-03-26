@@ -39,20 +39,21 @@ jobs:
           oc apply -f network/networkpolicy.yaml -n ${{ env.NAMESPACE }}
           echo "✅ NetworkPolicies appliquées"
 
-      - name: Déployer VM1 Firewall (conteneur)
+      - name: Déployer VM1 pfSense (VM)
         run: |
-          oc apply -f vms/vm1-pfsense/deployment.yaml -n ${{ env.NAMESPACE }}
-          echo "✅ VM1 Firewall appliqué"
+          oc apply -f vms/vm1-pfsense/virtualmachine.yaml -n ${{ env.NAMESPACE }}
+          echo "✅ VM1 pfSense appliquée"
 
-      - name: Déployer VM3 DB
+      - name: Déployer VM3 DB (VM)
         run: |
           oc apply -f vms/vm3-db/virtualmachine.yaml -n ${{ env.NAMESPACE }}
-          echo "✅ VM3 appliquée"
+          oc apply -f vms/vm3-db/service.yaml -n ${{ env.NAMESPACE }}
+          echo "✅ VM3 DB appliquée"
 
-      - name: Déployer VM2 Web
+      - name: Déployer VM2 Web (conteneur)
         run: |
-          oc apply -f vms/vm2-web/virtualmachine.yaml -n ${{ env.NAMESPACE }}
-          echo "✅ VM2 appliquée"
+          oc apply -f vms/vm2-web/deployment.yaml -n ${{ env.NAMESPACE }}
+          echo "✅ VM2 Web conteneur appliqué"
 
       - name: Résumé final
         run: |
@@ -60,18 +61,18 @@ jobs:
           echo "  DÉPLOIEMENT TERMINÉ"
           echo "══════════════════════════════════"
           echo ""
-          echo "── VirtualMachines ──"
+          echo "── VMs (pfSense + DB) ──"
           oc get vm -n ${{ env.NAMESPACE }} \
             -o custom-columns="NOM:.metadata.name,STATUT:.status.printableStatus,PRÊTE:.status.ready"
           echo ""
-          echo "── Conteneur Firewall ──"
-          oc get deployment vm1-firewall -n ${{ env.NAMESPACE }} \
-            -o custom-columns="NOM:.metadata.name,PRET:.status.readyReplicas,DISPONIBLE:.status.availableReplicas"
+          echo "── Conteneur Web ──"
+          oc get deployment vm2-web -n ${{ env.NAMESPACE }} \
+            -o custom-columns="NOM:.metadata.name,PRET:.status.readyReplicas,DISPO:.status.availableReplicas"
           echo ""
           echo "── DataVolumes ──"
           oc get dv -n ${{ env.NAMESPACE }} \
             -o custom-columns="NOM:.metadata.name,PHASE:.status.phase"
           echo ""
-          echo "── NetworkPolicies ──"
-          oc get networkpolicy -n ${{ env.NAMESPACE }} \
-            -o custom-columns="NOM:.metadata.name"
+          echo "── Route VM2 ──"
+          oc get route vm2-web-route -n ${{ env.NAMESPACE }} \
+            -o custom-columns="NOM:.metadata.name,URL:.spec.host"
