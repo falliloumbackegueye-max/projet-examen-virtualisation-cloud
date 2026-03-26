@@ -35,7 +35,14 @@ spec:
           sockets: 1
           threads: 1
         memory:
-          guest: 1Gi
+          guest: 512Mi
+        resources:
+          requests:
+            memory: 512Mi
+            cpu: "250m"
+          limits:
+            memory: 512Mi
+            cpu: "1"
         devices:
           disks:
             - name: rootdisk
@@ -49,14 +56,6 @@ spec:
               masquerade: {}
               model: virtio
           rng: {}
-        machine:
-          type: q35
-        firmware:
-          bootloader:
-            efi: {}
-        features:
-          smm:
-            enabled: true
       networks:
         - name: default
           pod: {}

@@ -21,7 +21,7 @@ spec:
           storageClassName: gp3
           resources:
             requests:
-              storage: 11Gi
+              storage: 10Gi
           accessModes:
             - ReadWriteOnce
   template:
@@ -36,7 +36,14 @@ spec:
           sockets: 1
           threads: 1
         memory:
-          guest: 2Gi
+          guest: 1Gi
+        resources:
+          requests:
+            memory: 1Gi
+            cpu: "500m"
+          limits:
+            memory: 1Gi
+            cpu: "1"
         devices:
           disks:
             - name: rootdisk
@@ -50,14 +57,6 @@ spec:
               masquerade: {}
               model: virtio
           rng: {}
-        machine:
-          type: q35
-        firmware:
-          bootloader:
-            efi: {}
-        features:
-          smm:
-            enabled: true
       networks:
         - name: default
           pod: {}
