@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vm3-db
+  namespace: fallilou-dev
+  labels:
+    app: vm3-db
+    zone: lan
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vm3-db
+  template:
+    metadata:
+      labels:
+        app: vm3-db
+        zone: lan
+        kubevirt.io/domain: vm3-db
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: "RootPassword123x"
+            - name: MYSQL_DATABASE
+              value: "appdb"
+            - name: MYSQL_USER
+              value: "appuser"
+            - name: MYSQL_PASSWORD
+              value: "AppPassword123x"
+          ports:
+            - containerPort: 3306
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          volumeMounts:
+            - name: mysql-data
+              mountPath: /var/lib/mysql
+      volumes:
+        - name: mysql-data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vm3-db-svc
+  namespace: fallilou-dev
+  labels:
+    app: vm3-db
+spec:
+  selector:
+    app: vm3-db
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: 3306
+  type: ClusterIP
