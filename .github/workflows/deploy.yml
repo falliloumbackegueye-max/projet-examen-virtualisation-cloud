@@ -45,6 +45,11 @@ jobs:
           oc apply -f network/networkpolicy.yaml -n ${{ env.NAMESPACE }}
           echo "✅ NetworkPolicies appliquées"
 
+      - name: Appliquer Secrets cloud-init
+        run: |
+          oc apply -f vms/vm2-web/cloudinit-secret.yaml -n ${{ env.NAMESPACE }}
+          echo "✅ Secrets appliqués"
+
       - name: Déployer VM3 DB
         run: |
           oc apply -f vms/vm3-db/virtualmachine.yaml -n ${{ env.NAMESPACE }}
@@ -64,7 +69,6 @@ jobs:
         run: |
           echo "══════════════════════════════════"
           echo "  DÉPLOIEMENT TERMINÉ"
-          echo "  Namespace : ${{ env.NAMESPACE }}"
           echo "══════════════════════════════════"
           oc get vm -n ${{ env.NAMESPACE }} \
             -o custom-columns="NOM:.metadata.name,STATUT:.status.printableStatus,PRÊTE:.status.ready"
