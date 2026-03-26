@@ -1,1 +1,7 @@
 sha256~6SDFHlOl_ANVl-p3u-jGG18238JmT9B8g_tcx3nTo0Y
+
+bash-5.1 ~ $ oc whoami -t
+sha256~6SDFHlOl_ANVl-p3u-jGG18238JmT9B8g_tcx3nTo0Y
+bash-5.1 ~ $ oc whoami --show-server
+https://172.30.0.1:443
+bash-5.1 ~ $ 
