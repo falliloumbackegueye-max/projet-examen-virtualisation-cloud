@@ -124,3 +124,4 @@ oc get net-attach-def -n projet-fin-module
 - VM3 est sur le réseau LAN uniquement, jamais exposée sur Internet
 - pfSense gère le NAT et filtre tout le trafic entrant/sortant
 - Les mots de passe doivent être changés avant mise en production
+# Déploiement alx 26 mar 2026 00:17:23 GMT
