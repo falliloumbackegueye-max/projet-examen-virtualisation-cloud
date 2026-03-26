@@ -56,7 +56,7 @@ spec:
                   sudo: ALL=(ALL) NOPASSWD:ALL
                   shell: /bin/bash
                   lock_passwd: false
-                  passwd: $6$rounds=4096$sel$hashed
+                  passwd: $6$CT.OxNzznZS8fra/$OqQufVTTaBPSiJ1x8/I9XaWIQyBV4cobZtZymtJy.T04CkuRyEe6dv7ohRupWYARQM3YSc/qvF3iKFbC/FNgC1
               ssh_pwauth: true
               package_update: true
               packages:
