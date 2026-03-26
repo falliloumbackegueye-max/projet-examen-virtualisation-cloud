@@ -127,3 +127,4 @@ oc get net-attach-def -n projet-fin-module
 # Déploiement alx 26 mar 2026 00:17:23 GMT
 # Deploy alx 26 mar 2026 00:18:59 GMT
 # Deploy alx 26 mar 2026 00:25:47 GMT
+# Deploy alx 26 mar 2026 00:26:16 GMT
