@@ -39,10 +39,10 @@ jobs:
           oc apply -f network/networkpolicy.yaml -n ${{ env.NAMESPACE }}
           echo "✅ NetworkPolicies appliquées"
 
-      - name: Appliquer Secret cloud-init VM2
+      - name: Déployer VM1 Firewall (conteneur)
         run: |
-          oc apply -f vms/vm2-web/cloudinit-secret.yaml -n ${{ env.NAMESPACE }}
-          echo "✅ Secret VM2 appliqué"
+          oc apply -f vms/vm1-pfsense/deployment.yaml -n ${{ env.NAMESPACE }}
+          echo "✅ VM1 Firewall appliqué"
 
       - name: Déployer VM3 DB
         run: |
@@ -58,10 +58,20 @@ jobs:
         run: |
           echo "══════════════════════════════════"
           echo "  DÉPLOIEMENT TERMINÉ"
-          echo "  Note: VM1 pfSense limitée à 2 VMs max sur Sandbox"
           echo "══════════════════════════════════"
+          echo ""
+          echo "── VirtualMachines ──"
           oc get vm -n ${{ env.NAMESPACE }} \
             -o custom-columns="NOM:.metadata.name,STATUT:.status.printableStatus,PRÊTE:.status.ready"
           echo ""
+          echo "── Conteneur Firewall ──"
+          oc get deployment vm1-firewall -n ${{ env.NAMESPACE }} \
+            -o custom-columns="NOM:.metadata.name,PRET:.status.readyReplicas,DISPONIBLE:.status.availableReplicas"
+          echo ""
+          echo "── DataVolumes ──"
           oc get dv -n ${{ env.NAMESPACE }} \
             -o custom-columns="NOM:.metadata.name,PHASE:.status.phase"
+          echo ""
+          echo "── NetworkPolicies ──"
+          oc get networkpolicy -n ${{ env.NAMESPACE }} \
+            -o custom-columns="NOM:.metadata.name"
