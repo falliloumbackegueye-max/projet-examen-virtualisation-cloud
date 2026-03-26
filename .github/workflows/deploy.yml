@@ -39,6 +39,11 @@ jobs:
           oc apply -f network/networkpolicy.yaml -n ${{ env.NAMESPACE }}
           echo "✅ NetworkPolicies appliquées"
 
+      - name: Secret cloud-init VM1
+        run: |
+          oc apply -f vms/vm1-firewall/cloudinit-secret.yaml -n ${{ env.NAMESPACE }}
+          echo "✅ Secret VM1 appliqué"
+
       - name: VM1 Firewall (VM KubeVirt)
         run: |
           oc apply -f vms/vm1-firewall/virtualmachine.yaml -n ${{ env.NAMESPACE }}
@@ -59,11 +64,9 @@ jobs:
           echo "══════════════════════════════════"
           echo "  DÉPLOIEMENT TERMINÉ"
           echo "══════════════════════════════════"
-          echo "── VMs KubeVirt ──"
           oc get vm -n ${{ env.NAMESPACE }} \
             -o custom-columns="NOM:.metadata.name,STATUT:.status.printableStatus,PRÊTE:.status.ready"
           echo ""
-          echo "── Conteneur DB ──"
           oc get deployment vm3-db -n ${{ env.NAMESPACE }} \
             -o custom-columns="NOM:.metadata.name,DISPO:.status.availableReplicas"
           echo ""
