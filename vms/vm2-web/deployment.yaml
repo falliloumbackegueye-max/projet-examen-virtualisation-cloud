@@ -25,32 +25,7 @@ spec:
           args:
             - |
               mkdir -p /opt/app
-              cat > /opt/app/package.json << 'EOF'
-              {"name":"app","version":"1.0.0","dependencies":{"express":"^4.18.2","mysql2":"^3.6.0"}}
-              EOF
-              cat > /opt/app/index.js << 'EOF'
-              const express = require('express');
-              const mysql = require('mysql2/promise');
-              const app = express();
-              const PORT = process.env.PORT || 3000;
-              app.get('/', async (req, res) => {
-                try {
-                  const conn = await mysql.createConnection({
-                    host: process.env.DB_HOST || 'vm3-db-svc',
-                    user: 'appuser',
-                    password: 'AppPassword123x',
-                    database: 'appdb'
-                  });
-                  const [rows] = await conn.execute('SELECT NOW() AS time, VERSION() AS version');
-                  await conn.end();
-                  res.json({ status: 'OK', vm: 'vm2-web (conteneur)', db: rows[0] });
-                } catch(e) {
-                  res.status(500).json({ status: 'DB_ERROR', error: e.message });
-                }
-              });
-              app.get('/health', (_, res) => res.json({ status: 'UP', vm: 'vm2-web' }));
-              app.listen(PORT, () => console.log('App on port ' + PORT));
-              EOF
+              echo '{"name":"app","version":"1.0.0","dependencies":{"express":"^4.18.2"}}' > /opt/app/package.json
               cd /opt/app && npm install --cache /opt/app/.npm
           volumeMounts:
             - name: app-data
@@ -58,10 +33,160 @@ spec:
       containers:
         - name: nodejs
           image: node:18-slim
-          command: ["node", "/opt/app/index.js"]
+          command: ["node", "-e"]
+          args:
+            - |
+              const express = require('/opt/app/node_modules/express');
+              const app = express();
+              const PORT = process.env.PORT || 3000;
+              const HTML = `<!DOCTYPE html>
+              <html lang="fr" class="dark">
+              <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Projet Fin de Module</title>
+              <script src="https://cdn.tailwindcss.com"></script>
+              <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+              <style>
+                body{background:#0a0e1a}
+                body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,229,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,255,.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+                @keyframes fadein{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+                @keyframes pulse2{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.5)}}
+                .fi{animation:fadein .6s ease forwards}
+                .d1{animation-delay:.1s;opacity:0}.d2{animation-delay:.2s;opacity:0}.d3{animation-delay:.3s;opacity:0}.d4{animation-delay:.4s;opacity:0}.d5{animation-delay:.5s;opacity:0}
+                .dp{animation:pulse2 2s infinite}
+                .ch{transition:all .3s}.ch:hover{border-color:rgba(0,229,255,.35)!important;box-shadow:0 0 20px rgba(0,229,255,.08);transform:translateY(-2px)}
+              </style>
+              </head>
+              <body class="font-sans text-slate-200 min-h-screen" style="font-family:Syne,sans-serif">
+              <div class="relative z-10 max-w-5xl mx-auto px-6 py-10">
+                <header class="flex items-center justify-between mb-12 pb-6 border-b border-slate-800 fi">
+                  <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-400 to-violet-600 flex items-center justify-center text-2xl" style="box-shadow:0 0 24px rgba(0,229,255,.2)">⬡</div>
+                    <div>
+                      <h1 class="text-xl font-extrabold tracking-tight">Projet Fin de Module</h1>
+                      <p class="text-xs text-slate-500 tracking-widest uppercase mt-0.5" style="font-family:Space Mono,monospace">OpenShift Virtualization · Dakar 2026</p>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs px-4 py-2 rounded-full" style="font-family:Space Mono,monospace">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 dp"></span>Système opérationnel
+                  </div>
+                </header>
+                <div class="fi d1 text-center mb-14">
+                  <div class="inline-block bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs px-4 py-1.5 rounded-full mb-5 tracking-widest uppercase" style="font-family:Space Mono,monospace">Infrastructure as Code · GitHub CI/CD</div>
+                  <h2 class="text-4xl font-extrabold tracking-tight mb-4 leading-tight">Architecture <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-violet-500">Virtualisée</span><br/>sur OpenShift</h2>
+                  <p class="text-slate-400 text-base max-w-xl mx-auto leading-relaxed">Déploiement automatisé de 3 serveurs via GitHub Actions.<br/>Firewall · Serveur Web · Base de données MySQL.</p>
+                </div>
+                <div class="fi d2 bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden mb-6">
+                  <div class="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-cyan-500/5">
+                    <span class="text-xs text-cyan-400 tracking-widest uppercase" style="font-family:Space Mono,monospace">Infrastructure · 3 Nœuds</span>
+                    <span class="text-xs text-slate-600 bg-slate-800 px-3 py-1 rounded" style="font-family:Space Mono,monospace">namespace: fallilou-dev</span>
+                  </div>
+                  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 p-6">
+                    <div class="bg-slate-800/50 border border-slate-700 rounded-xl p-5 ch">
+                      <div class="flex items-center justify-between mb-4">
+                        <div class="w-10 h-10 rounded-lg bg-violet-500/20 border border-violet-500/30 flex items-center justify-center text-xl">🔥</div>
+                        <span class="text-xs bg-violet-500/20 text-violet-400 border border-violet-500/30 px-2 py-0.5 rounded-full" style="font-family:Space Mono,monospace">VM · KubeVirt</span>
+                      </div>
+                      <p class="font-bold text-sm mb-1">VM1 · Firewall</p>
+                      <p class="text-xs text-slate-500 mb-3" style="font-family:Space Mono,monospace">Fedora Linux · iptables</p>
+                      <div class="space-y-1.5 text-xs text-slate-500" style="font-family:Space Mono,monospace">
+                        <div class="flex justify-between"><span>Zone</span><span class="text-violet-400">WAN · DMZ · LAN</span></div>
+                        <div class="flex justify-between"><span>Rôle</span><span class="text-slate-300">Passerelle NAT</span></div>
+                      </div>
+                      <div class="flex items-center gap-2 mt-4 pt-3 border-t border-slate-700 text-xs text-slate-400" style="font-family:Space Mono,monospace">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400" style="box-shadow:0 0 6px #10b981"></span>iptables · NAT
+                      </div>
+                    </div>
+                    <div class="bg-slate-800/50 border border-cyan-500/20 rounded-xl p-5 ch relative">
+                      <div class="absolute top-3 right-3 text-xs text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded" style="font-family:Space Mono,monospace">VOUS ÊTES ICI</div>
+                      <div class="flex items-center justify-between mb-4">
+                        <div class="w-10 h-10 rounded-lg bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-xl">🌐</div>
+                        <span class="text-xs bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded-full" style="font-family:Space Mono,monospace">Pod · Conteneur</span>
+                      </div>
+                      <p class="font-bold text-sm mb-1">VM2 · Serveur Web</p>
+                      <p class="text-xs text-slate-500 mb-3" style="font-family:Space Mono,monospace">Node.js 18 · Express</p>
+                      <div class="space-y-1.5 text-xs text-slate-500" style="font-family:Space Mono,monospace">
+                        <div class="flex justify-between"><span>Zone</span><span class="text-cyan-400">DMZ</span></div>
+                        <div class="flex justify-between"><span>Port</span><span class="text-slate-300">:3000 → :80</span></div>
+                      </div>
+                      <div class="flex items-center gap-2 mt-4 pt-3 border-t border-slate-700 text-xs text-slate-400" style="font-family:Space Mono,monospace">
+                        <span class="w-1.5 h-1.5 rounded-full bg-cyan-400" style="box-shadow:0 0 6px #00e5ff"></span>Running · Route
+                      </div>
+                    </div>
+                    <div class="bg-slate-800/50 border border-slate-700 rounded-xl p-5 ch">
+                      <div class="flex items-center justify-between mb-4">
+                        <div class="w-10 h-10 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-xl">🗄</div>
+                        <span class="text-xs bg-violet-500/20 text-violet-400 border border-violet-500/30 px-2 py-0.5 rounded-full" style="font-family:Space Mono,monospace">VM · KubeVirt</span>
+                      </div>
+                      <p class="font-bold text-sm mb-1">VM3 · Base de données</p>
+                      <p class="text-xs text-slate-500 mb-3" style="font-family:Space Mono,monospace">Fedora Linux · MySQL 8.0</p>
+                      <div class="space-y-1.5 text-xs text-slate-500" style="font-family:Space Mono,monospace">
+                        <div class="flex justify-between"><span>Zone</span><span class="text-amber-400">LAN (isolé)</span></div>
+                        <div class="flex justify-between"><span>Port</span><span class="text-slate-300">:3306</span></div>
+                      </div>
+                      <div class="flex items-center gap-2 mt-4 pt-3 border-t border-slate-700 text-xs text-slate-400" style="font-family:Space Mono,monospace">
+                        <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>LAN uniquement
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="fi d3 bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden mb-6">
+                  <div class="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-cyan-500/5">
+                    <span class="text-xs text-cyan-400 tracking-widest uppercase" style="font-family:Space Mono,monospace">Règles Firewall · pfSense</span>
+                    <span class="text-xs text-slate-600 bg-slate-800 px-3 py-1 rounded" style="font-family:Space Mono,monospace">iptables · NetworkPolicy</span>
+                  </div>
+                  <div class="p-6 flex flex-col gap-3">
+                    ${[
+                      {f:'Internet',to:'VM2 Web',p:'80,443',a:true,d:'Accès public'},
+                      {f:'Internet',to:'VM3 DB',p:'tous',a:false,d:'DB jamais exposée'},
+                      {f:'LAN',to:'Internet',p:'tous',a:true,d:'MAJ VM3'},
+                      {f:'LAN',to:'DMZ',p:'tous',a:true,d:'VM3 → VM2'},
+                      {f:'DMZ',to:'LAN',p:'tous',a:false,d:'VM2 isolée de VM3'},
+                      {f:'DMZ',to:'Internet',p:'80,443',a:true,d:'MAJ VM2'},
+                    ].map(r=>`
+                    <div class="flex items-center gap-3 px-4 py-3 bg-slate-800/40 border border-slate-700/50 rounded-lg hover:bg-slate-800 transition-colors">
+                      <span class="text-xs bg-slate-700 text-slate-300 px-2.5 py-1 rounded min-w-[72px] text-center" style="font-family:Space Mono,monospace">${r.f}</span>
+                      <span class="text-slate-600">→</span>
+                      <span class="text-xs bg-slate-700 text-slate-300 px-2.5 py-1 rounded min-w-[72px] text-center" style="font-family:Space Mono,monospace">${r.to}</span>
+                      <span class="text-xs text-cyan-400 hidden md:block" style="font-family:Space Mono,monospace">:${r.p}</span>
+                      <span class="text-xs text-slate-600 hidden lg:block flex-1">${r.d}</span>
+                      <span class="ml-auto text-xs px-3 py-1 rounded-full border ${r.a?'bg-emerald-500/10 text-emerald-400 border-emerald-500/20':'bg-red-500/10 text-red-400 border-red-500/20'}" style="font-family:Space Mono,monospace">${r.a?'✓ AUTORISÉ':'✕ BLOQUÉ'}</span>
+                    </div>`).join('')}
+                  </div>
+                </div>
+                <div class="fi d4 bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden mb-6">
+                  <div class="px-6 py-4 border-b border-slate-800 bg-cyan-500/5">
+                    <span class="text-xs text-cyan-400 tracking-widest uppercase" style="font-family:Space Mono,monospace">Stack Technologique</span>
+                  </div>
+                  <div class="p-6 grid grid-cols-2 md:grid-cols-4 gap-3">
+                    ${[
+                      {i:'⎈',l:'OpenShift',s:'Virtualization'},
+                      {i:'⬡',l:'KubeVirt',s:'VMs sur K8s'},
+                      {i:'🐙',l:'GitHub',s:'CI/CD Actions'},
+                      {i:'🔥',l:'pfSense',s:'Firewall NAT'},
+                      {i:'🌐',l:'Node.js 18',s:'Express · API'},
+                      {i:'🗄',l:'MySQL 8.0',s:'Base de données'},
+                      {i:'🐧',l:'Fedora 39',s:'OS des VMs'},
+                      {i:'☁️',l:'AWS EBS',s:'gp3 Storage'},
+                    ].map(t=>`
+                    <div class="flex items-center gap-3 bg-slate-800/40 border border-slate-700/50 rounded-lg px-3 py-3 ch">
+                      <span class="text-xl">${t.i}</span>
+                      <div><p class="text-xs font-semibold">${t.l}</p><p class="text-xs text-slate-500" style="font-family:Space Mono,monospace">${t.s}</p></div>
+                    </div>`).join('')}
+                  </div>
+                </div>
+                <footer class="fi d5 flex flex-col md:flex-row items-center justify-between pt-6 border-t border-slate-800 text-xs text-slate-600 gap-2" style="font-family:Space Mono,monospace">
+                  <span>Projet Fin de Module · OpenShift Virtualization · Dakar 2026</span>
+                  <span id="clk"></span>
+                </footer>
+              </div>
+              <script>setInterval(()=>{document.getElementById('clk').textContent=new Date().toLocaleString('fr-FR',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'})},1000)</script>
+              </body></html>`;
+              app.get('/', (_,res)=>res.send(HTML));
+              app.get('/health', (_,res)=>res.json({status:'UP',vm:'vm2-web',zone:'DMZ'}));
+              app.listen(PORT,()=>console.log('App on port '+PORT));
           env:
-            - name: DB_HOST
-              value: "vm3-db-svc"
             - name: PORT
               value: "3000"
           ports:
