@@ -126,3 +126,4 @@ oc get net-attach-def -n projet-fin-module
 - Les mots de passe doivent être changés avant mise en production
 # Déploiement alx 26 mar 2026 00:17:23 GMT
 # Deploy alx 26 mar 2026 00:18:59 GMT
+# Deploy alx 26 mar 2026 00:25:47 GMT
