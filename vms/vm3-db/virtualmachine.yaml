@@ -1,10 +1,3 @@
----
-# =====================================================
-# VM3 — Ubuntu 22.04 Server DB (MySQL 8.0)
-# Adapté Sandbox : réseau pod (masquerade), gp3 storage
-# Zone simulée : LAN (label zone=lan)
-# Accessible UNIQUEMENT depuis VM2 via NetworkPolicy
-# =====================================================
 apiVersion: kubevirt.io/v1
 kind: VirtualMachine
 metadata:
@@ -41,9 +34,6 @@ spec:
               disk:
                 bus: virtio
               bootOrder: 1
-            - name: mysql-data-disk
-              disk:
-                bus: virtio
             - name: cloudinit-disk
               disk:
                 bus: virtio
@@ -59,35 +49,26 @@ spec:
         - name: ubuntu-disk
           dataVolume:
             name: vm3-ubuntu-dv
-        - name: mysql-data-disk
-          persistentVolumeClaim:
-            claimName: vm3-mysql-data
         - name: cloudinit-disk
           cloudInitNoCloud:
             userData: |
               #cloud-config
               hostname: vm3-db
-              fqdn: vm3-db.projet.local
               timezone: Africa/Dakar
-
               users:
                 - name: ubuntu
                   groups: sudo
                   sudo: ALL=(ALL) NOPASSWD:ALL
                   shell: /bin/bash
                   lock_passwd: false
-                  # Mot de passe : Ubuntu2024!
-                  passwd: $6$rounds=4096$randomsalt$kJfV5pJHmFdFLmzqKxz9Wg1vPXHQZ7YdCVr3Rl1lqp0KZqJhB.eGfuiPVdXJCxlkTRHLnYFIu4Pjrl5cFxJH1
-
+                  passwd: $6$rounds=4096$sel$hashed
               ssh_pwauth: true
-
               package_update: true
               package_upgrade: true
               packages:
                 - mysql-server
                 - mysql-client
                 - ufw
-
               write_files:
                 - path: /etc/mysql/mysql.conf.d/99-projet.cnf
                   permissions: '0644'
@@ -95,15 +76,10 @@ spec:
                     [mysqld]
                     bind-address        = 0.0.0.0
                     mysqlx-bind-address = 0.0.0.0
-                    max_connections     = 100
-
                 - path: /opt/mysql-init.sql
                   permissions: '0600'
                   content: |
                     DELETE FROM mysql.user WHERE User='';
-                    DELETE FROM mysql.user WHERE User='root'
-                      AND Host NOT IN ('localhost','127.0.0.1','::1');
-                    DROP DATABASE IF EXISTS test;
                     ALTER USER 'root'@'localhost'
                       IDENTIFIED WITH mysql_native_password BY 'RootPassword123!';
                     CREATE DATABASE IF NOT EXISTS appdb
@@ -113,46 +89,24 @@ spec:
                     GRANT ALL PRIVILEGES ON appdb.* TO 'appuser'@'%';
                     USE appdb;
                     CREATE TABLE IF NOT EXISTS test_connexion (
-                      id         INT AUTO_INCREMENT PRIMARY KEY,
-                      message    VARCHAR(255) NOT NULL,
+                      id INT AUTO_INCREMENT PRIMARY KEY,
+                      message VARCHAR(255) NOT NULL,
                       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     );
                     INSERT INTO test_connexion (message)
                       VALUES ('Connexion VM2 vers VM3 OK !');
                     FLUSH PRIVILEGES;
-
-                - path: /opt/setup-disk.sh
-                  permissions: '0755'
-                  content: |
-                    #!/bin/bash
-                    DISK="/dev/vdb"
-                    MOUNT="/var/lib/mysql"
-                    if ! blkid $DISK 2>/dev/null; then
-                      mkfs.ext4 -F $DISK
-                    fi
-                    UUID=$(blkid -s UUID -o value $DISK)
-                    grep -q "$UUID" /etc/fstab || \
-                      echo "UUID=$UUID $MOUNT ext4 defaults,nofail 0 2" >> /etc/fstab
-                    systemctl stop mysql || true
-                    mount $DISK $MOUNT
-                    chown -R mysql:mysql $MOUNT
-                    systemctl start mysql
-
               runcmd:
-                - /opt/setup-disk.sh
                 - systemctl start mysql
                 - mysql -u root < /opt/mysql-init.sql
                 - rm -f /opt/mysql-init.sql
                 - systemctl restart mysql
                 - systemctl enable mysql
                 - ufw allow 22/tcp
-                - ufw allow from any to any port 3306 proto tcp
+                - ufw allow 3306/tcp
                 - ufw --force enable
-
-              final_message: "VM3 DB prete ! MySQL operationnel."
-
+              final_message: "VM3 DB prete !"
 ---
-# DataVolume Ubuntu 22.04 — gp3, 20Gi
 apiVersion: cdi.kubevirt.io/v1beta1
 kind: DataVolume
 metadata:
