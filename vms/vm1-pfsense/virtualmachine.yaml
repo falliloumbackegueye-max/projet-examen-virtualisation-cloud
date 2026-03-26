@@ -4,7 +4,7 @@ metadata:
   name: vm1-pfsense
   namespace: fallilou-dev
   labels:
-    kubevirt.io/domain: vm1-pfsense
+    kubevirt.io/domain: vm1-firewall
     app: vm1-pfsense
     zone: wan
 spec:
