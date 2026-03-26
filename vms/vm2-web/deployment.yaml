@@ -18,18 +18,13 @@ spec:
         zone: dmz
         kubevirt.io/domain: vm2-web
     spec:
-      containers:
-        - name: nginx-nodejs
+      initContainers:
+        - name: setup
           image: node:18-slim
-          command: ["/bin/bash", "-c"]
+          command: ["/bin/sh", "-c"]
           args:
             - |
-              apt-get update -qq && \
-              apt-get install -y -qq nginx curl default-mysql-client && \
-              mkdir -p /opt/app && \
-              cat > /opt/app/package.json << 'EOF'
-              {"name":"app","version":"1.0.0","dependencies":{"express":"^4.18.2","mysql2":"^3.6.0"}}
-              EOF
+              mkdir -p /opt/app
               cat > /opt/app/index.js << 'EOF'
               const express = require('express');
               const mysql = require('mysql2/promise');
@@ -53,31 +48,37 @@ spec:
               app.get('/health', (_, res) => res.json({ status: 'UP', vm: 'vm2-web' }));
               app.listen(PORT, () => console.log('App on port ' + PORT));
               EOF
-              cd /opt/app && npm install && \
-              cat > /etc/nginx/sites-available/default << 'EOF'
-              server {
-                listen 80;
-                server_name _;
-                location / { proxy_pass http://127.0.0.1:3000; }
-                location /health { proxy_pass http://127.0.0.1:3000/health; }
-              }
+              cat > /opt/app/package.json << 'EOF'
+              {"name":"app","version":"1.0.0","dependencies":{"express":"^4.18.2","mysql2":"^3.6.0"}}
               EOF
-              nginx && node /opt/app/index.js
+              cd /opt/app && npm install
+          volumeMounts:
+            - name: app-data
+              mountPath: /opt/app
+      containers:
+        - name: nodejs
+          image: node:18-slim
+          command: ["node", "/opt/app/index.js"]
           env:
             - name: DB_HOST
               value: "vm3-db-svc"
             - name: PORT
               value: "3000"
           ports:
-            - containerPort: 80
             - containerPort: 3000
           resources:
             requests:
-              memory: "512Mi"
+              memory: "256Mi"
               cpu: "250m"
             limits:
-              memory: "1Gi"
+              memory: "512Mi"
               cpu: "500m"
+          volumeMounts:
+            - name: app-data
+              mountPath: /opt/app
+      volumes:
+        - name: app-data
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -92,7 +93,7 @@ spec:
   ports:
     - name: http
       port: 80
-      targetPort: 80
+      targetPort: 3000
   type: ClusterIP
 ---
 apiVersion: route.openshift.io/v1
