@@ -14,9 +14,10 @@ spec:
       metadata:
         name: vm3-db-rootdisk
       spec:
-        source:
-          http:
-            url: "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
+        sourceRef:
+          kind: DataSource
+          name: fedora
+          namespace: openshift-virtualization-os-images
         storage:
           storageClassName: gp3
           resources:
@@ -70,8 +71,8 @@ spec:
             userData: |
               #cloud-config
               hostname: vm3-db
-              user: ubuntu
-              password: Ubuntu2024x
+              user: fedora
+              password: Fedora2024x
               chpasswd: { expire: False }
               ssh_pwauth: true
               package_update: true
@@ -93,10 +94,11 @@ spec:
                     GRANT ALL PRIVILEGES ON appdb.* TO 'appuser'@'%';
                     FLUSH PRIVILEGES;
               runcmd:
-                - systemctl start mysql
+                - systemctl start mysqld
                 - mysql -u root < /opt/mysql-init.sql
                 - rm -f /opt/mysql-init.sql
-                - systemctl enable mysql
-                - ufw allow 22/tcp
-                - ufw allow 3306/tcp
-                - ufw --force enable
+                - systemctl enable mysqld
+                - systemctl start firewalld
+                - firewall-cmd --permanent --add-port=22/tcp
+                - firewall-cmd --permanent --add-port=3306/tcp
+                - firewall-cmd --reload

@@ -14,8 +14,10 @@ spec:
       metadata:
         name: vm1-pfsense-rootdisk
       spec:
-        source:
-          blank: {}
+        sourceRef:
+          kind: DataSource
+          name: fedora
+          namespace: openshift-virtualization-os-images
         storage:
           storageClassName: gp3
           resources:
@@ -68,7 +70,20 @@ spec:
           cloudInitNoCloud:
             userData: |
               #cloud-config
-              hostname: vm1-pfsense
-              user: admin
-              password: pfsense
+              hostname: vm1-firewall
+              user: fedora
+              password: Fedora2024x
               chpasswd: { expire: False }
+              ssh_pwauth: true
+              packages:
+                - iptables
+                - iptables-services
+              runcmd:
+                - iptables -P FORWARD DROP
+                - iptables -A FORWARD -p tcp --dport 80 -j ACCEPT
+                - iptables -A FORWARD -p tcp --dport 443 -j ACCEPT
+                - iptables -A FORWARD -p tcp --dport 3306 -j DROP
+                - iptables -A FORWARD -s 192.168.10.0/24 -j ACCEPT
+                - iptables -A FORWARD -d 192.168.10.0/24 -s 192.168.100.0/24 -j DROP
+                - systemctl enable iptables
+                - service iptables save
