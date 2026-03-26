@@ -21,7 +21,7 @@ spec:
           storageClassName: gp3
           resources:
             requests:
-              storage: 10Gi
+              storage: 11Gi
           accessModes:
             - ReadWriteOnce
   template:
