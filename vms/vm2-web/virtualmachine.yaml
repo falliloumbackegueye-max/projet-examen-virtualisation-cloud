@@ -68,5 +68,24 @@ spec:
             name: vm2-web-rootdisk
         - name: cloudinitdisk
           cloudInitNoCloud:
-            userDataSecretRef:
-              name: vm2-web-cloudinit
+            userData: |
+              #cloud-config
+              hostname: vm2-web
+              user: ubuntu
+              password: Ubuntu2024x
+              chpasswd: { expire: False }
+              ssh_pwauth: true
+              package_update: true
+              packages:
+                - nginx
+                - nodejs
+                - npm
+                - git
+                - curl
+                - mysql-client
+              runcmd:
+                - mkdir -p /opt/app
+                - echo '{"name":"app","version":"1.0.0","dependencies":{"express":"^4.18.2","mysql2":"^3.6.0"}}' > /opt/app/package.json
+                - cd /opt/app && npm install
+                - chown -R ubuntu:ubuntu /opt/app
+                - systemctl restart nginx
