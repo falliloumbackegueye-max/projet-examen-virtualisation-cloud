@@ -262,4 +262,4 @@ tailwind.config = {
 
 app.get('/', (_req, res) => res.send(HTML));
 app.get('/health', (_req, res) => res.json({ status: 'UP', timestamp: new Date().toISOString() }));
-app.listen(PORT, () => console.log('Terminal ready on port ' + PORT));
+app.listen(PORT, () => console.log('Terminale ready on port ' + PORT));
