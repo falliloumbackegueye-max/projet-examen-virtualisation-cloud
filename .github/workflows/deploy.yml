@@ -34,45 +34,48 @@ jobs:
             --insecure-skip-tls-verify=true
           echo "✅ Connecté : $(oc whoami)"
 
-      - name: Appliquer NetworkPolicies
+      - name: NetworkPolicies
         run: |
           oc apply -f network/networkpolicy.yaml -n ${{ env.NAMESPACE }}
           echo "✅ NetworkPolicies appliquées"
 
-      - name: Déployer VM1 pfSense (VM)
+      - name: VM1 pfSense (VM)
         run: |
           oc apply -f vms/vm1-pfsense/virtualmachine.yaml -n ${{ env.NAMESPACE }}
           echo "✅ VM1 pfSense appliquée"
 
-      - name: Déployer VM3 DB (VM)
+      - name: VM3 DB (VM)
         run: |
           oc apply -f vms/vm3-db/virtualmachine.yaml -n ${{ env.NAMESPACE }}
           oc apply -f vms/vm3-db/service.yaml -n ${{ env.NAMESPACE }}
           echo "✅ VM3 DB appliquée"
 
-      - name: Déployer VM2 Web (conteneur)
+      - name: VM2 Web (conteneur)
         run: |
           oc apply -f vms/vm2-web/deployment.yaml -n ${{ env.NAMESPACE }}
           echo "✅ VM2 Web conteneur appliqué"
 
-      - name: Résumé final
+      - name: Résumé
         run: |
           echo "══════════════════════════════════"
           echo "  DÉPLOIEMENT TERMINÉ"
           echo "══════════════════════════════════"
-          echo ""
-          echo "── VMs (pfSense + DB) ──"
+          echo "── VMs KubeVirt ──"
           oc get vm -n ${{ env.NAMESPACE }} \
             -o custom-columns="NOM:.metadata.name,STATUT:.status.printableStatus,PRÊTE:.status.ready"
           echo ""
           echo "── Conteneur Web ──"
           oc get deployment vm2-web -n ${{ env.NAMESPACE }} \
-            -o custom-columns="NOM:.metadata.name,PRET:.status.readyReplicas,DISPO:.status.availableReplicas"
+            -o custom-columns="NOM:.metadata.name,DISPO:.status.availableReplicas"
           echo ""
           echo "── DataVolumes ──"
           oc get dv -n ${{ env.NAMESPACE }} \
             -o custom-columns="NOM:.metadata.name,PHASE:.status.phase"
           echo ""
+          echo "── NetworkPolicies ──"
+          oc get networkpolicy -n ${{ env.NAMESPACE }} \
+            -o custom-columns="NOM:.metadata.name"
+          echo ""
           echo "── Route VM2 ──"
           oc get route vm2-web-route -n ${{ env.NAMESPACE }} \
-            -o custom-columns="NOM:.metadata.name,URL:.spec.host"
+            -o jsonpath='URL: https://{.spec.host}{"\n"}'

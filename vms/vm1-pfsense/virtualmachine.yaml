@@ -6,6 +6,7 @@ metadata:
   labels:
     kubevirt.io/domain: vm1-pfsense
     app: vm1-pfsense
+    zone: wan
 spec:
   runStrategy: Manual
   dataVolumeTemplates:
@@ -30,6 +31,7 @@ spec:
       labels:
         kubevirt.io/domain: vm1-pfsense
         app: vm1-pfsense
+        zone: wan
     spec:
       domain:
         cpu:
@@ -44,7 +46,7 @@ spec:
             cpu: "250m"
           limits:
             memory: 512Mi
-            cpu: "1"
+            cpu: "500m"
         devices:
           disks:
             - name: rootdisk
@@ -79,11 +81,21 @@ spec:
                 - iptables
                 - iptables-services
               runcmd:
-                - iptables -P FORWARD DROP
+                # Règle 1 : WAN → DMZ HTTP/HTTPS autorisé
                 - iptables -A FORWARD -p tcp --dport 80 -j ACCEPT
                 - iptables -A FORWARD -p tcp --dport 443 -j ACCEPT
-                - iptables -A FORWARD -p tcp --dport 3306 -j DROP
+                # Règle 2 : WAN → LAN bloqué
+                - iptables -A FORWARD -d 192.168.10.0/24 -j DROP
+                # Règle 3 : LAN → Internet autorisé
                 - iptables -A FORWARD -s 192.168.10.0/24 -j ACCEPT
-                - iptables -A FORWARD -d 192.168.10.0/24 -s 192.168.100.0/24 -j DROP
+                # Règle 4 : LAN → DMZ autorisé
+                - iptables -A FORWARD -s 192.168.10.0/24 -d 192.168.100.0/24 -j ACCEPT
+                # Règle 5 : DMZ → LAN bloqué
+                - iptables -A FORWARD -s 192.168.100.0/24 -d 192.168.10.0/24 -j DROP
+                # Règle 6 : DMZ → Internet HTTP/HTTPS autorisé
+                - iptables -A FORWARD -s 192.168.100.0/24 -p tcp --dport 80 -j ACCEPT
+                - iptables -A FORWARD -s 192.168.100.0/24 -p tcp --dport 443 -j ACCEPT
+                # Règle 7 : défaut bloquer tout
+                - iptables -P FORWARD DROP
                 - systemctl enable iptables
                 - service iptables save

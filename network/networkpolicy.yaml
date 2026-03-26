@@ -1,11 +1,5 @@
 ---
-# =====================================================
-# Isolation DMZ/LAN via NetworkPolicy (sans NAD)
-# Sandbox ne supporte pas les NADs custom
-# On simule DMZ/LAN avec des labels et des NetworkPolicies
-# =====================================================
-
-# Politique 1 : VM3 (DB) accepte UNIQUEMENT VM2 (Web) sur port 3306
+# Règle 1 : VM3 DB — accepte uniquement VM2 Web sur port 3306
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -14,7 +8,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      kubevirt.io/domain: vm3-db
+      app: vm3-db
   policyTypes:
     - Ingress
     - Egress
@@ -22,7 +16,7 @@ spec:
     - from:
         - podSelector:
             matchLabels:
-              kubevirt.io/domain: vm2-web
+              app: vm2-web
       ports:
         - protocol: TCP
           port: 3306
@@ -30,15 +24,12 @@ spec:
     - to:
         - podSelector:
             matchLabels:
-              kubevirt.io/domain: vm2-web
+              app: vm2-web
     - ports:
         - protocol: UDP
           port: 53
-        - protocol: TCP
-          port: 53
-
 ---
-# Politique 2 : VM2 (Web) — accès entrant HTTP/HTTPS + sortie vers VM3 et Internet
+# Règle 2 : VM2 Web — accepte HTTP entrant, sort vers VM3 et Internet
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -47,7 +38,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      kubevirt.io/domain: vm2-web
+      app: vm2-web
   policyTypes:
     - Ingress
     - Egress
@@ -56,30 +47,23 @@ spec:
         - protocol: TCP
           port: 80
         - protocol: TCP
-          port: 443
-        - protocol: TCP
           port: 3000
   egress:
-    # Vers VM3 MySQL
     - to:
         - podSelector:
             matchLabels:
-              kubevirt.io/domain: vm3-db
+              app: vm3-db
       ports:
         - protocol: TCP
           port: 3306
-    # Vers Internet
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
     - ports:
         - protocol: UDP
           port: 53
-        - protocol: TCP
-          port: 53
-
 ---
-# Politique 3 : VM3 (DB) — refus de tout trafic Internet direct
+# Règle 3 : VM3 DB — bloque tout accès Internet direct
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -88,11 +72,11 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      kubevirt.io/domain: vm3-db
+      app: vm3-db
   policyTypes:
     - Ingress
   ingress:
     - from:
         - podSelector:
             matchLabels:
-              kubevirt.io/domain: vm2-web
+              app: vm2-web

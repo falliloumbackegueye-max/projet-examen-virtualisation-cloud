@@ -6,6 +6,7 @@ metadata:
   labels:
     kubevirt.io/domain: vm3-db
     app: vm3-db
+    zone: lan
 spec:
   runStrategy: Manual
   dataVolumeTemplates:
@@ -30,6 +31,7 @@ spec:
       labels:
         kubevirt.io/domain: vm3-db
         app: vm3-db
+        zone: lan
     spec:
       domain:
         cpu:
@@ -37,14 +39,14 @@ spec:
           sockets: 1
           threads: 1
         memory:
-          guest: 1Gi
+          guest: 512Mi
         resources:
           requests:
-            memory: 1Gi
-            cpu: "500m"
+            memory: 512Mi
+            cpu: "250m"
           limits:
-            memory: 1Gi
-            cpu: "1"
+            memory: 512Mi
+            cpu: "500m"
         devices:
           disks:
             - name: rootdisk
@@ -78,7 +80,6 @@ spec:
               package_update: true
               packages:
                 - mysql-server
-                - ufw
               write_files:
                 - path: /etc/mysql/mysql.conf.d/99-projet.cnf
                   permissions: '0644'
@@ -98,7 +99,5 @@ spec:
                 - mysql -u root < /opt/mysql-init.sql
                 - rm -f /opt/mysql-init.sql
                 - systemctl enable mysqld
-                - systemctl start firewalld
-                - firewall-cmd --permanent --add-port=22/tcp
                 - firewall-cmd --permanent --add-port=3306/tcp
                 - firewall-cmd --reload
