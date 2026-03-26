@@ -7,7 +7,7 @@ metadata:
     kubevirt.io/domain: vm3-db
     app: vm3-db
 spec:
-  runStrategy: Always
+  runStrategy: Manual
   dataVolumeTemplates:
     - apiVersion: cdi.kubevirt.io/v1beta1
       kind: DataVolume

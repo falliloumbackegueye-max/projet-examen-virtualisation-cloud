@@ -7,7 +7,7 @@ metadata:
     kubevirt.io/domain: vm2-web
     app: vm2-web
 spec:
-  runStrategy: Always
+  runStrategy: Manual
   dataVolumeTemplates:
     - apiVersion: cdi.kubevirt.io/v1beta1
       kind: DataVolume

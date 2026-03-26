@@ -7,7 +7,7 @@ metadata:
     kubevirt.io/domain: vm1-pfsense
     app: vm1-pfsense
 spec:
-  runStrategy: Always
+  runStrategy: Manual
   dataVolumeTemplates:
     - apiVersion: cdi.kubevirt.io/v1beta1
       kind: DataVolume
