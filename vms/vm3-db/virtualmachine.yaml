@@ -6,7 +6,6 @@ metadata:
   labels:
     kubevirt.io/domain: vm3-db
     app: vm3-db
-    zone: lan
 spec:
   running: true
   template:
@@ -14,7 +13,6 @@ spec:
       labels:
         kubevirt.io/domain: vm3-db
         app: vm3-db
-        zone: lan
     spec:
       domain:
         cpu:
@@ -46,9 +44,6 @@ spec:
         - name: pod-network
           pod: {}
       volumes:
-        - name: ubuntu-disk
-          dataVolume:
-            name: vm3-ubuntu-dv
         - name: cloudinit-disk
           cloudInitNoCloud:
             userData: |
@@ -64,48 +59,35 @@ spec:
                   passwd: $6$rounds=4096$sel$hashed
               ssh_pwauth: true
               package_update: true
-              package_upgrade: true
               packages:
                 - mysql-server
-                - mysql-client
                 - ufw
               write_files:
                 - path: /etc/mysql/mysql.conf.d/99-projet.cnf
                   permissions: '0644'
                   content: |
                     [mysqld]
-                    bind-address        = 0.0.0.0
-                    mysqlx-bind-address = 0.0.0.0
+                    bind-address = 0.0.0.0
                 - path: /opt/mysql-init.sql
                   permissions: '0600'
                   content: |
-                    DELETE FROM mysql.user WHERE User='';
-                    ALTER USER 'root'@'localhost'
-                      IDENTIFIED WITH mysql_native_password BY 'RootPassword123!';
-                    CREATE DATABASE IF NOT EXISTS appdb
-                      CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-                    CREATE USER IF NOT EXISTS 'appuser'@'%'
-                      IDENTIFIED WITH mysql_native_password BY 'AppPassword123!';
+                    ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'RootPassword123!';
+                    CREATE DATABASE IF NOT EXISTS appdb CHARACTER SET utf8mb4;
+                    CREATE USER IF NOT EXISTS 'appuser'@'%' IDENTIFIED WITH mysql_native_password BY 'AppPassword123!';
                     GRANT ALL PRIVILEGES ON appdb.* TO 'appuser'@'%';
-                    USE appdb;
-                    CREATE TABLE IF NOT EXISTS test_connexion (
-                      id INT AUTO_INCREMENT PRIMARY KEY,
-                      message VARCHAR(255) NOT NULL,
-                      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    );
-                    INSERT INTO test_connexion (message)
-                      VALUES ('Connexion VM2 vers VM3 OK !');
                     FLUSH PRIVILEGES;
               runcmd:
                 - systemctl start mysql
                 - mysql -u root < /opt/mysql-init.sql
                 - rm -f /opt/mysql-init.sql
-                - systemctl restart mysql
                 - systemctl enable mysql
                 - ufw allow 22/tcp
                 - ufw allow 3306/tcp
                 - ufw --force enable
               final_message: "VM3 DB prete !"
+        - name: ubuntu-disk
+          dataVolume:
+            name: vm3-ubuntu-dv
 ---
 apiVersion: cdi.kubevirt.io/v1beta1
 kind: DataVolume

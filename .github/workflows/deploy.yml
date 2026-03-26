@@ -34,7 +34,6 @@ jobs:
             --server="${{ secrets.OC_SERVER }}" \
             --insecure-skip-tls-verify=true
           echo "✅ Connecté : $(oc whoami)"
-          echo "✅ Namespace : $(oc project -q)"
 
       - name: Vérifier KubeVirt
         run: |
@@ -49,35 +48,24 @@ jobs:
 
       - name: Déployer VM3 DB
         run: |
-          oc apply -f vms/vm3-db/pvc.yaml            -n ${{ env.NAMESPACE }}
           oc apply -f vms/vm3-db/virtualmachine.yaml -n ${{ env.NAMESPACE }}
-          echo "✅ VM3 DB appliquée"
+          echo "✅ VM3 appliquée"
 
       - name: Déployer VM2 Web
         run: |
           oc apply -f vms/vm2-web/virtualmachine.yaml -n ${{ env.NAMESPACE }}
-          echo "✅ VM2 Web appliquée"
+          echo "✅ VM2 appliquée"
 
       - name: Déployer VM1 pfSense
         run: |
           oc apply -f vms/vm1-pfsense/virtualmachine.yaml -n ${{ env.NAMESPACE }}
-          echo "✅ VM1 pfSense appliquée"
+          echo "✅ VM1 appliquée"
 
       - name: Résumé final
         run: |
           echo "══════════════════════════════════"
-          echo "  DÉPLOIEMENT TERMINÉ"
-          echo "  Namespace : ${{ env.NAMESPACE }}"
-          echo "══════════════════════════════════"
-          echo ""
-          echo "── VirtualMachines ──"
           oc get vm -n ${{ env.NAMESPACE }} \
             -o custom-columns="NOM:.metadata.name,STATUT:.status.printableStatus,PRÊTE:.status.ready"
           echo ""
-          echo "── DataVolumes ──"
           oc get dv -n ${{ env.NAMESPACE }} \
             -o custom-columns="NOM:.metadata.name,PHASE:.status.phase"
-          echo ""
-          echo "── NetworkPolicies ──"
-          oc get networkpolicy -n ${{ env.NAMESPACE }} \
-            -o custom-columns="NOM:.metadata.name"
