@@ -50,7 +50,7 @@ spec:
               model: virtio
           rng: {}
         machine:
-          type: pc-q35-rhel9.2.0
+          type: q35
         firmware:
           bootloader:
             efi: {}
