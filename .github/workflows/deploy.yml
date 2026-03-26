@@ -45,13 +45,6 @@ jobs:
           oc apply -f network/networkpolicy.yaml -n ${{ env.NAMESPACE }}
           echo "✅ NetworkPolicies appliquées"
 
-      - name: Créer DataVolumes (images OS)
-        run: |
-          oc apply -f vms/vm3-db/datavolume.yaml    -n ${{ env.NAMESPACE }}
-          oc apply -f vms/vm2-web/datavolume.yaml   -n ${{ env.NAMESPACE }}
-          oc apply -f vms/vm1-pfsense/datavolume.yaml -n ${{ env.NAMESPACE }}
-          echo "✅ DataVolumes créés"
-
       - name: Déployer VM3 DB
         run: |
           oc apply -f vms/vm3-db/virtualmachine.yaml -n ${{ env.NAMESPACE }}
@@ -70,8 +63,14 @@ jobs:
       - name: Résumé final
         run: |
           echo "══════════════════════════════════"
+          echo "  DÉPLOIEMENT TERMINÉ"
+          echo "  Namespace : ${{ env.NAMESPACE }}"
+          echo "══════════════════════════════════"
           oc get vm -n ${{ env.NAMESPACE }} \
             -o custom-columns="NOM:.metadata.name,STATUT:.status.printableStatus,PRÊTE:.status.ready"
           echo ""
           oc get dv -n ${{ env.NAMESPACE }} \
             -o custom-columns="NOM:.metadata.name,PHASE:.status.phase"
+          echo ""
+          oc get networkpolicy -n ${{ env.NAMESPACE }} \
+            -o custom-columns="NOM:.metadata.name"
