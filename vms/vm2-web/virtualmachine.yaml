@@ -77,19 +77,5 @@ spec:
               password: Fedora2024x
               chpasswd: { expire: False }
               ssh_pwauth: true
-              packages:
-                - nginx
-                - nodejs
-                - npm
-                - iproute
-              runcmd:
-                - ip link add dmz0 type dummy || true
-                - ip addr add 192.168.100.10/24 dev dmz0 || true
-                - ip link set dmz0 up
-                - ip route add 192.168.10.0/24 via 192.168.100.1 dev dmz0 || true
-                - mkdir -p /opt/app
-                - echo '{"name":"app","version":"1.0.0","dependencies":{"express":"^4.18.2"}}' > /opt/app/package.json
-                - echo 'const e=require("express"),a=e(),P=3000;a.get("/",(q,r)=>r.json({status:"OK",vm:"vm2-web",ip:"192.168.100.10",zone:"DMZ"}));a.get("/health",(q,r)=>r.json({status:"UP"}));a.listen(P)' > /opt/app/index.js
-                - cd /opt/app && npm install
-                - systemctl enable nginx
-                - systemctl start nginx
+            secretRef:
+              name: vm2-web-cloudinit

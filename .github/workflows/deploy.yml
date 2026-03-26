@@ -39,10 +39,11 @@ jobs:
           oc apply -f network/networkpolicy.yaml -n ${{ env.NAMESPACE }}
           echo "✅ NetworkPolicies appliquées"
 
-      - name: Secret cloud-init VM1
+      - name: Secrets cloud-init
         run: |
           oc apply -f vms/vm1-firewall/cloudinit-secret.yaml -n ${{ env.NAMESPACE }}
-          echo "✅ Secret VM1 appliqué"
+          oc apply -f vms/vm2-web/cloudinit-secret.yaml -n ${{ env.NAMESPACE }}
+          echo "✅ Secrets appliqués"
 
       - name: VM1 Firewall (VM KubeVirt)
         run: |
@@ -57,18 +58,26 @@ jobs:
       - name: VM3 DB (conteneur MySQL)
         run: |
           oc apply -f vms/vm3-db/deployment.yaml -n ${{ env.NAMESPACE }}
-          echo "✅ VM3 DB conteneur appliqué"
+          echo "✅ VM3 DB appliqué"
 
       - name: Résumé
         run: |
-          echo "══════════════════════════════════"
+          echo "══════════════════════════════════════"
           echo "  DÉPLOIEMENT TERMINÉ"
-          echo "══════════════════════════════════"
+          echo "══════════════════════════════════════"
+          echo ""
+          echo "── VMs KubeVirt ──"
           oc get vm -n ${{ env.NAMESPACE }} \
             -o custom-columns="NOM:.metadata.name,STATUT:.status.printableStatus,PRÊTE:.status.ready"
           echo ""
+          echo "── Conteneur DB ──"
           oc get deployment vm3-db -n ${{ env.NAMESPACE }} \
             -o custom-columns="NOM:.metadata.name,DISPO:.status.availableReplicas"
           echo ""
+          echo "── NetworkPolicies ──"
           oc get networkpolicy -n ${{ env.NAMESPACE }} \
             -o custom-columns="NOM:.metadata.name"
+          echo ""
+          echo "  VM1 Firewall : WAN(eth0) + DMZ(dmz0=192.168.100.1) + LAN(lan0=192.168.10.1)"
+          echo "  VM2 Web      : DMZ 192.168.100.10 - Nginx + Node.js"
+          echo "  VM3 DB       : LAN 192.168.10.20  - MySQL + table etudiants"
