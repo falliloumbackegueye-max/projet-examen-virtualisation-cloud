@@ -77,5 +77,25 @@ spec:
               password: Fedora2024x
               chpasswd: { expire: False }
               ssh_pwauth: true
-            secretRef:
-              name: vm1-firewall-cloudinit
+              packages:
+                - iptables
+                - iptables-services
+                - iproute
+              runcmd:
+                - echo 1 > /proc/sys/net/ipv4/ip_forward
+                - ip link add dmz0 type dummy || true
+                - ip addr add 192.168.100.1/24 dev dmz0 || true
+                - ip link set dmz0 up
+                - ip link add lan0 type dummy || true
+                - ip addr add 192.168.10.1/24 dev lan0 || true
+                - ip link set lan0 up
+                - iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+                - iptables -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
+                - iptables -A FORWARD -i eth0 -o dmz0 -p tcp -m multiport --dports 80,443 -j ACCEPT
+                - iptables -A FORWARD -i eth0 -o lan0 -j DROP
+                - iptables -A FORWARD -i lan0 -o eth0 -j ACCEPT
+                - iptables -A FORWARD -i lan0 -o dmz0 -j ACCEPT
+                - iptables -A FORWARD -i dmz0 -o lan0 -j DROP
+                - iptables -A FORWARD -i dmz0 -o eth0 -p tcp -m multiport --dports 80,443 -j ACCEPT
+                - iptables -P FORWARD DROP
+                - service iptables save || true
