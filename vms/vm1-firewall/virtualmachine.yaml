@@ -1,11 +1,11 @@
 apiVersion: kubevirt.io/v1
 kind: VirtualMachine
 metadata:
-  name: vm1-pfsense
+  name: vm1-firewall
   namespace: fallilou-dev
   labels:
     kubevirt.io/domain: vm1-firewall
-    app: vm1-pfsense
+    app: vm1-firewall
     zone: wan
 spec:
   runStrategy: Manual
@@ -13,7 +13,7 @@ spec:
     - apiVersion: cdi.kubevirt.io/v1beta1
       kind: DataVolume
       metadata:
-        name: vm1-pfsense-rootdisk
+        name: vm1-firewall-rootdisk
       spec:
         sourceRef:
           kind: DataSource
@@ -29,8 +29,8 @@ spec:
   template:
     metadata:
       labels:
-        kubevirt.io/domain: vm1-pfsense
-        app: vm1-pfsense
+        kubevirt.io/domain: vm1-firewall
+        app: vm1-firewall
         zone: wan
     spec:
       domain:
@@ -67,7 +67,7 @@ spec:
       volumes:
         - name: rootdisk
           dataVolume:
-            name: vm1-pfsense-rootdisk
+            name: vm1-firewall-rootdisk
         - name: cloudinitdisk
           cloudInitNoCloud:
             userData: |
@@ -80,22 +80,30 @@ spec:
               packages:
                 - iptables
                 - iptables-services
+                - net-tools
+                - iproute
               runcmd:
-                # Règle 1 : WAN → DMZ HTTP/HTTPS autorisé
+                # ── Règles de filtrage pfSense ──────────────────
+                # Règle 1 : WAN → DMZ HTTP/HTTPS autorisé (VM2 Web)
                 - iptables -A FORWARD -p tcp --dport 80 -j ACCEPT
                 - iptables -A FORWARD -p tcp --dport 443 -j ACCEPT
-                # Règle 2 : WAN → LAN bloqué
+                # Règle 2 : WAN → LAN bloqué (DB jamais exposée)
                 - iptables -A FORWARD -d 192.168.10.0/24 -j DROP
-                # Règle 3 : LAN → Internet autorisé
+                # Règle 3 : LAN → Internet autorisé (VM3 mises à jour)
                 - iptables -A FORWARD -s 192.168.10.0/24 -j ACCEPT
-                # Règle 4 : LAN → DMZ autorisé
+                # Règle 4 : LAN → DMZ autorisé (VM3 peut joindre VM2)
                 - iptables -A FORWARD -s 192.168.10.0/24 -d 192.168.100.0/24 -j ACCEPT
-                # Règle 5 : DMZ → LAN bloqué
+                # Règle 5 : DMZ → LAN bloqué (VM2 ne peut pas joindre VM3)
                 - iptables -A FORWARD -s 192.168.100.0/24 -d 192.168.10.0/24 -j DROP
-                # Règle 6 : DMZ → Internet HTTP/HTTPS autorisé
+                # Règle 6 : DMZ → Internet HTTP/HTTPS autorisé (mises à jour VM2)
                 - iptables -A FORWARD -s 192.168.100.0/24 -p tcp --dport 80 -j ACCEPT
                 - iptables -A FORWARD -s 192.168.100.0/24 -p tcp --dport 443 -j ACCEPT
-                # Règle 7 : défaut bloquer tout
+                # Règle 7 : NAT masquerade (sortie Internet)
+                - iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+                # Règle 8 : Politique par défaut DROP
                 - iptables -P FORWARD DROP
+                # Sauvegarder et activer au boot
                 - systemctl enable iptables
                 - service iptables save
+                - echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+                - sysctl -p

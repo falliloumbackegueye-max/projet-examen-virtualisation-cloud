@@ -1,5 +1,5 @@
 ---
-# Règle 1 : VM3 DB — accepte uniquement VM2 Web sur port 3306
+# Règle 1 : VM3 DB accepte UNIQUEMENT VM2 Web sur port 3306
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -28,8 +28,10 @@ spec:
     - ports:
         - protocol: UDP
           port: 53
+        - protocol: TCP
+          port: 53
 ---
-# Règle 2 : VM2 Web — accepte HTTP entrant, sort vers VM3 et Internet
+# Règle 2 : VM2 Web — accès HTTP entrant + sortie Internet
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -62,8 +64,10 @@ spec:
     - ports:
         - protocol: UDP
           port: 53
+        - protocol: TCP
+          port: 53
 ---
-# Règle 3 : VM3 DB — bloque tout accès Internet direct
+# Règle 3 : VM3 DB bloque tout accès direct Internet
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -80,3 +84,21 @@ spec:
         - podSelector:
             matchLabels:
               app: vm2-web
+---
+# Règle 4 : VM1 Firewall — autoriser tout le trafic de gestion
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: firewall-policy
+  namespace: fallilou-dev
+spec:
+  podSelector:
+    matchLabels:
+      app: vm1-firewall
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - {}
+  egress:
+    - {}
