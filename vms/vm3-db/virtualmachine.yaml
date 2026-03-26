@@ -8,6 +8,22 @@ metadata:
     app: vm3-db
 spec:
   running: true
+  dataVolumeTemplates:
+    - apiVersion: cdi.kubevirt.io/v1beta1
+      kind: DataVolume
+      metadata:
+        name: vm3-db-rootdisk
+      spec:
+        source:
+          http:
+            url: "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
+        storage:
+          storageClassName: gp3
+          resources:
+            requests:
+              storage: 20Gi
+          accessModes:
+            - ReadWriteOnce
   template:
     metadata:
       labels:
@@ -16,47 +32,48 @@ spec:
     spec:
       domain:
         cpu:
-          cores: 2
+          cores: 1
+          sockets: 1
+          threads: 1
         memory:
           guest: 2Gi
-        resources:
-          requests:
-            memory: 2Gi
-            cpu: "500m"
-          limits:
-            memory: 2Gi
-            cpu: "2"
         devices:
           disks:
-            - name: ubuntu-disk
+            - name: rootdisk
               disk:
                 bus: virtio
-              bootOrder: 1
-            - name: cloudinit-disk
+            - name: cloudinitdisk
               disk:
                 bus: virtio
           interfaces:
-            - name: pod-network
+            - name: default
               masquerade: {}
               model: virtio
           rng: {}
+        machine:
+          type: pc-q35-rhel9.2.0
+        firmware:
+          bootloader:
+            efi: {}
+        features:
+          smm:
+            enabled: true
       networks:
-        - name: pod-network
+        - name: default
           pod: {}
+      terminationGracePeriodSeconds: 180
       volumes:
-        - name: cloudinit-disk
+        - name: rootdisk
+          dataVolume:
+            name: vm3-db-rootdisk
+        - name: cloudinitdisk
           cloudInitNoCloud:
             userData: |
               #cloud-config
               hostname: vm3-db
-              timezone: Africa/Dakar
-              users:
-                - name: ubuntu
-                  groups: sudo
-                  sudo: ALL=(ALL) NOPASSWD:ALL
-                  shell: /bin/bash
-                  lock_passwd: false
-                  passwd: $6$CT.OxNzznZS8fra/$OqQufVTTaBPSiJ1x8/I9XaWIQyBV4cobZtZymtJy.T04CkuRyEe6dv7ohRupWYARQM3YSc/qvF3iKFbC/FNgC1
+              user: ubuntu
+              password: Ubuntu2024x
+              chpasswd: { expire: False }
               ssh_pwauth: true
               package_update: true
               packages:
@@ -71,9 +88,9 @@ spec:
                 - path: /opt/mysql-init.sql
                   permissions: '0600'
                   content: |
-                    ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'RootPassword123!';
+                    ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'RootPassword123x';
                     CREATE DATABASE IF NOT EXISTS appdb CHARACTER SET utf8mb4;
-                    CREATE USER IF NOT EXISTS 'appuser'@'%' IDENTIFIED WITH mysql_native_password BY 'AppPassword123!';
+                    CREATE USER IF NOT EXISTS 'appuser'@'%' IDENTIFIED WITH mysql_native_password BY 'AppPassword123x';
                     GRANT ALL PRIVILEGES ON appdb.* TO 'appuser'@'%';
                     FLUSH PRIVILEGES;
               runcmd:
@@ -84,7 +101,3 @@ spec:
                 - ufw allow 22/tcp
                 - ufw allow 3306/tcp
                 - ufw --force enable
-              final_message: "VM3 DB prete !"
-        - name: ubuntu-disk
-          dataVolume:
-            name: vm3-ubuntu-dv

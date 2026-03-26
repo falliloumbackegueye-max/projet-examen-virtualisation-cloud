@@ -1,9 +1,3 @@
----
-# =====================================================
-# VM2 — Ubuntu 22.04 Server Web (Nginx + Node.js)
-# Adapté Sandbox : réseau pod (masquerade), gp3 storage
-# Zone simulée : DMZ (label zone=dmz)
-# =====================================================
 apiVersion: kubevirt.io/v1
 kind: VirtualMachine
 metadata:
@@ -12,70 +6,76 @@ metadata:
   labels:
     kubevirt.io/domain: vm2-web
     app: vm2-web
-    zone: dmz
 spec:
   running: true
+  dataVolumeTemplates:
+    - apiVersion: cdi.kubevirt.io/v1beta1
+      kind: DataVolume
+      metadata:
+        name: vm2-web-rootdisk
+      spec:
+        source:
+          http:
+            url: "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
+        storage:
+          storageClassName: gp3
+          resources:
+            requests:
+              storage: 20Gi
+          accessModes:
+            - ReadWriteOnce
   template:
     metadata:
       labels:
         kubevirt.io/domain: vm2-web
         app: vm2-web
-        zone: dmz
     spec:
       domain:
         cpu:
-          cores: 2
+          cores: 1
+          sockets: 1
+          threads: 1
         memory:
           guest: 2Gi
-        resources:
-          requests:
-            memory: 2Gi
-            cpu: "500m"
-          limits:
-            memory: 2Gi
-            cpu: "2"
         devices:
           disks:
-            - name: ubuntu-disk
+            - name: rootdisk
               disk:
                 bus: virtio
-              bootOrder: 1
-            - name: cloudinit-disk
+            - name: cloudinitdisk
               disk:
                 bus: virtio
           interfaces:
-            - name: pod-network
+            - name: default
               masquerade: {}
               model: virtio
           rng: {}
+        machine:
+          type: pc-q35-rhel9.2.0
+        firmware:
+          bootloader:
+            efi: {}
+        features:
+          smm:
+            enabled: true
       networks:
-        - name: pod-network
+        - name: default
           pod: {}
+      terminationGracePeriodSeconds: 180
       volumes:
-        - name: ubuntu-disk
+        - name: rootdisk
           dataVolume:
-            name: vm2-ubuntu-dv
-        - name: cloudinit-disk
+            name: vm2-web-rootdisk
+        - name: cloudinitdisk
           cloudInitNoCloud:
             userData: |
               #cloud-config
               hostname: vm2-web
-              fqdn: vm2-web.projet.local
-              timezone: Africa/Dakar
-
-              users:
-                - name: ubuntu
-                  groups: sudo
-                  sudo: ALL=(ALL) NOPASSWD:ALL
-                  shell: /bin/bash
-                  lock_passwd: false
-                  # Mot de passe : Ubuntu2024!
-                  passwd: $6$rounds=4096$randomsalt$kJfV5pJHmFdFLmzqKxz9Wg1vPXHQZ7YdCVr3Rl1lqp0KZqJhB.eGfuiPVdXJCxlkTRHLnYFIu4Pjrl5cFxJH1
-
+              user: ubuntu
+              password: Ubuntu2024x
+              chpasswd: { expire: False }
               ssh_pwauth: true
-
               package_update: true
-              package_upgrade: true
               packages:
                 - nginx
                 - nodejs
@@ -83,126 +83,62 @@ spec:
                 - git
                 - curl
                 - mysql-client
-                - ufw
-
               write_files:
                 - path: /opt/app/index.js
                   permissions: '0644'
                   content: |
                     const express = require('express');
-                    const mysql   = require('mysql2/promise');
-                    const app     = express();
-                    const PORT    = process.env.PORT || 3000;
-
-                    const dbConfig = {
-                      host:     process.env.DB_HOST     || '127.0.0.1',
-                      port:     parseInt(process.env.DB_PORT) || 3306,
-                      user:     process.env.DB_USER     || 'appuser',
-                      password: process.env.DB_PASSWORD || 'AppPassword123!',
-                      database: process.env.DB_NAME     || 'appdb',
-                    };
-
+                    const mysql = require('mysql2/promise');
+                    const app = express();
+                    const PORT = process.env.PORT || 3000;
                     app.get('/', async (req, res) => {
                       try {
-                        const conn   = await mysql.createConnection(dbConfig);
-                        const [rows] = await conn.execute(
-                          'SELECT NOW() AS time, VERSION() AS version'
-                        );
+                        const conn = await mysql.createConnection({
+                          host: process.env.DB_HOST || 'vm3-db',
+                          user: 'appuser',
+                          password: 'AppPassword123x',
+                          database: 'appdb'
+                        });
+                        const [rows] = await conn.execute('SELECT NOW() AS time');
                         await conn.end();
-                        res.json({
-                          status:   'OK',
-                          vm:       'VM2 - Nginx + Node.js',
-                          database: rows[0],
-                        });
-                      } catch (err) {
-                        res.status(500).json({
-                          status: 'DB_ERROR',
-                          error:  err.message
-                        });
+                        res.json({ status: 'OK', vm: 'vm2-web', db: rows[0] });
+                      } catch(e) {
+                        res.status(500).json({ status: 'DB_ERROR', error: e.message });
                       }
                     });
-
-                    app.get('/health', (_req, res) =>
-                      res.json({ status: 'UP', vm: 'vm2-web' })
-                    );
-
-                    app.listen(PORT, () =>
-                      console.log(`App running on port ${PORT}`)
-                    );
-
+                    app.get('/health', (_, res) => res.json({ status: 'UP' }));
+                    app.listen(PORT, () => console.log('App on port ' + PORT));
                 - path: /opt/app/package.json
                   permissions: '0644'
                   content: |
-                    {
-                      "name": "projet-fin-module",
-                      "version": "1.0.0",
-                      "main": "index.js",
-                      "scripts": { "start": "node index.js" },
-                      "dependencies": {
-                        "express": "^4.18.2",
-                        "mysql2":  "^3.6.0"
-                      }
-                    }
-
-                - path: /opt/app/.env
-                  permissions: '0600'
+                    {"name":"app","version":"1.0.0","dependencies":{"express":"^4.18.2","mysql2":"^3.6.0"}}
+                - path: /etc/nginx/sites-available/nodeapp
+                  permissions: '0644'
                   content: |
-                    DB_HOST=vm3-db-svc
-                    DB_PORT=3306
-                    DB_USER=appuser
-                    DB_PASSWORD=AppPassword123!
-                    DB_NAME=appdb
-                    PORT=3000
-
+                    server {
+                      listen 80;
+                      server_name _;
+                      location / { proxy_pass http://127.0.0.1:3000; }
+                    }
                 - path: /etc/systemd/system/nodeapp.service
                   permissions: '0644'
                   content: |
                     [Unit]
                     Description=Node.js App
                     After=network.target
-
                     [Service]
-                    Type=simple
                     User=ubuntu
                     WorkingDirectory=/opt/app
-                    EnvironmentFile=/opt/app/.env
-                    ExecStart=/usr/bin/node /opt/app/index.js
+                    ExecStart=/usr/bin/node index.js
                     Restart=on-failure
-                    RestartSec=5
-
                     [Install]
                     WantedBy=multi-user.target
-
-                - path: /etc/nginx/sites-available/nodeapp
-                  permissions: '0644'
-                  content: |
-                    server {
-                        listen 80;
-                        server_name _;
-                        location / {
-                            proxy_pass         http://127.0.0.1:3000;
-                            proxy_http_version 1.1;
-                            proxy_set_header   Host $host;
-                            proxy_set_header   X-Real-IP $remote_addr;
-                        }
-                        location /health {
-                            proxy_pass http://127.0.0.1:3000/health;
-                        }
-                    }
-
               runcmd:
                 - cd /opt/app && npm install
                 - chown -R ubuntu:ubuntu /opt/app
-                - ln -sf /etc/nginx/sites-available/nodeapp /etc/nginx/sites-enabled/nodeapp
+                - ln -sf /etc/nginx/sites-available/nodeapp /etc/nginx/sites-enabled/
                 - rm -f /etc/nginx/sites-enabled/default
                 - nginx -t && systemctl restart nginx
                 - systemctl daemon-reload
                 - systemctl enable nodeapp
                 - systemctl start nodeapp
-                - ufw allow 22/tcp
-                - ufw allow 80/tcp
-                - ufw allow 3000/tcp
-                - ufw --force enable
-
-              final_message: "VM2 Web prete ! Nginx + Node.js demarres."
-

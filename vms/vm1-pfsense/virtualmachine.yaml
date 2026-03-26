@@ -1,10 +1,3 @@
----
-# =====================================================
-# VM1 — pfSense Firewall
-# Adapté Sandbox : 1 seule interface (pod network)
-# NAD DMZ/LAN non disponibles sur ce Sandbox
-# Les règles firewall sont documentées dans firewall-rules.xml
-# =====================================================
 apiVersion: kubevirt.io/v1
 kind: VirtualMachine
 metadata:
@@ -13,89 +6,70 @@ metadata:
   labels:
     kubevirt.io/domain: vm1-pfsense
     app: vm1-pfsense
-    zone: wan
 spec:
   running: true
+  dataVolumeTemplates:
+    - apiVersion: cdi.kubevirt.io/v1beta1
+      kind: DataVolume
+      metadata:
+        name: vm1-pfsense-rootdisk
+      spec:
+        source:
+          blank: {}
+        storage:
+          storageClassName: gp3
+          resources:
+            requests:
+              storage: 20Gi
+          accessModes:
+            - ReadWriteOnce
   template:
     metadata:
       labels:
         kubevirt.io/domain: vm1-pfsense
         app: vm1-pfsense
-        zone: wan
     spec:
       domain:
         cpu:
-          cores: 2
+          cores: 1
+          sockets: 1
+          threads: 1
         memory:
           guest: 1Gi
-        resources:
-          requests:
-            memory: 1Gi
-            cpu: "500m"
-          limits:
-            memory: 1Gi
-            cpu: "2"
         devices:
           disks:
-            - name: pfsense-disk
+            - name: rootdisk
               disk:
                 bus: virtio
-              bootOrder: 1
-            - name: pfsense-iso
-              cdrom:
-                bus: sata
-                readonly: true
-              bootOrder: 2
+            - name: cloudinitdisk
+              disk:
+                bus: virtio
           interfaces:
-            # Interface WAN uniquement (pod network = NAT Internet)
-            - name: wan
+            - name: default
               masquerade: {}
               model: virtio
           rng: {}
+        machine:
+          type: pc-q35-rhel9.2.0
+        firmware:
+          bootloader:
+            efi: {}
+        features:
+          smm:
+            enabled: true
       networks:
-        - name: wan
+        - name: default
           pod: {}
+      terminationGracePeriodSeconds: 180
       volumes:
-        - name: pfsense-disk
+        - name: rootdisk
           dataVolume:
-            name: pfsense-disk-dv
-        - name: pfsense-iso
-          dataVolume:
-            name: pfsense-iso-dv
-
----
-# Disque système pfSense (20Gi, gp3)
-apiVersion: cdi.kubevirt.io/v1beta1
-kind: DataVolume
-metadata:
-  name: pfsense-disk-dv
-  namespace: fallilou-dev
-spec:
-  source:
-    blank: {}
-  storage:
-    storageClassName: gp3
-    resources:
-      requests:
-        storage: 20Gi
-    accessModes:
-      - ReadWriteOnce
-
----
-# Import ISO pfSense CE 2.7
-apiVersion: cdi.kubevirt.io/v1beta1
-kind: DataVolume
-metadata:
-  name: pfsense-iso-dv
-  namespace: fallilou-dev
-spec:
-  source:
-    http:
-      url: "https://atxfiles.netgate.com/mirror/downloads/pfSense-CE-2.7.2-RELEASE-amd64.iso.gz"
-  storage:
-    storageClassName: gp3
-    resources:
-      requests:
-        storage: 5Gi
-    accessModes:
-      - ReadWriteOnce
+            name: vm1-pfsense-rootdisk
+        - name: cloudinitdisk
+          cloudInitNoCloud:
+            userData: |
+              #cloud-config
+              hostname: vm1-pfsense
+              user: admin
+              password: pfsense
+              chpasswd: { expire: False }
