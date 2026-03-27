@@ -49,16 +49,9 @@ jobs:
           oc apply -f vms/vm2-web/virtualmachine.yaml -n ${{ env.NAMESPACE }}
           echo "✅ VM2 Web appliquée"
 
-      - name: ConfigMap app Node.js
+      - name: VM3 DB ConfigMap + Deployment
         run: |
-          oc create configmap vm2-app-code \
-            --from-file=index.js=app/src/index.js \
-            --from-literal=package.json='{"name":"app","version":"1.0.0","dependencies":{"express":"^4.18.2","mysql2":"^3.6.0"}}' \
-            --dry-run=client -o yaml | oc apply -f - -n ${{ env.NAMESPACE }}
-          echo "✅ ConfigMap app créé"
-
-      - name: VM3 DB (conteneur MySQL)
-        run: |
+          oc apply -f vms/vm3-db/initdb-configmap.yaml -n ${{ env.NAMESPACE }}
           oc apply -f vms/vm3-db/deployment.yaml -n ${{ env.NAMESPACE }}
           echo "✅ VM3 DB appliqué"
 
@@ -72,3 +65,6 @@ jobs:
           echo ""
           oc get deployment vm3-db -n ${{ env.NAMESPACE }} \
             -o custom-columns="NOM:.metadata.name,DISPO:.status.availableReplicas"
+          echo ""
+          oc get networkpolicy -n ${{ env.NAMESPACE }} \
+            -o custom-columns="NOM:.metadata.name"

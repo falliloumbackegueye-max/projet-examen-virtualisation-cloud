@@ -82,7 +82,7 @@ spec:
                 - iptables-services
                 - iproute
               runcmd:
-                - echo 1 > /proc/sys/net/ipv4/ip_forward
+                - echo 1 > /proc/sys/net/ipv4/ip_forward 
                 - ip link add dmz0 type dummy || true
                 - ip addr add 192.168.100.1/24 dev dmz0 || true
                 - ip link set dmz0 up
