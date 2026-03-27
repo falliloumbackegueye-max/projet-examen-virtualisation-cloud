@@ -10,7 +10,7 @@ env:
 
 jobs:
   deploy:
-    name: Deploy VMs
+    name: Deploy Infrastructure
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -26,7 +26,7 @@ jobs:
           sudo mv oc /usr/local/bin/
           oc version --client
 
-      - name: Login to OpenShift Sandbox
+      - name: Login to OpenShift
         run: |
           oc login \
             --token="${{ secrets.OC_TOKEN }}" \
@@ -39,32 +39,47 @@ jobs:
           oc apply -f network/networkpolicy.yaml -n ${{ env.NAMESPACE }}
           echo "✅ NetworkPolicies appliquées"
 
-      - name: VM1 Firewall (VM KubeVirt)
+      - name: VM1 Firewall
         run: |
           oc apply -f vms/vm1-firewall/virtualmachine.yaml -n ${{ env.NAMESPACE }}
-          echo "✅ VM1 Firewall appliquée"
+          echo "✅ VM1 Firewall"
 
-      - name: VM2 Web (VM KubeVirt)
+      - name: VM2 Web
         run: |
           oc apply -f vms/vm2-web/virtualmachine.yaml -n ${{ env.NAMESPACE }}
-          echo "✅ VM2 Web appliquée"
+          echo "✅ VM2 Web"
 
-      - name: VM3 DB ConfigMap + Deployment
+      - name: VM3 DB ConfigMap
         run: |
           oc apply -f vms/vm3-db/initdb-configmap.yaml -n ${{ env.NAMESPACE }}
-          oc apply -f vms/vm3-db/deployment.yaml -n ${{ env.NAMESPACE }}
-          echo "✅ VM3 DB appliqué"
+          echo "✅ ConfigMap DB"
 
-      - name: Résumé
+      - name: VM3 DB Deployment
         run: |
-          echo "══════════════════════════════════════"
-          echo "  DÉPLOIEMENT TERMINÉ"
-          echo "══════════════════════════════════════"
+          oc apply -f vms/vm3-db/deployment.yaml -n ${{ env.NAMESPACE }}
+          echo "✅ VM3 DB"
+
+      - name: ConfigMap App Node.js
+        run: |
+          oc create configmap vm2-app-code \
+            --from-file=index.js=app/src/index.js \
+            --dry-run=client -o yaml | oc apply -f - -n ${{ env.NAMESPACE }}
+          echo "✅ ConfigMap App"
+
+      - name: Résumé final
+        run: |
+          echo "══════════════════════════════════════════"
+          echo "  BUILD FINAL TERMINÉ ✅"
+          echo "══════════════════════════════════════════"
+          echo ""
+          echo "── VMs KubeVirt ──"
           oc get vm -n ${{ env.NAMESPACE }} \
             -o custom-columns="NOM:.metadata.name,STATUT:.status.printableStatus,PRÊTE:.status.ready"
           echo ""
+          echo "── Conteneur DB ──"
           oc get deployment vm3-db -n ${{ env.NAMESPACE }} \
             -o custom-columns="NOM:.metadata.name,DISPO:.status.availableReplicas"
           echo ""
+          echo "── NetworkPolicies ──"
           oc get networkpolicy -n ${{ env.NAMESPACE }} \
             -o custom-columns="NOM:.metadata.name"
