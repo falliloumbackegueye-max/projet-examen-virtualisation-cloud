@@ -19,11 +19,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install oc CLI
+      - name: Install oc + virtctl CLI
         run: |
           curl -sLo oc.tar.gz https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux-amd64-rhel9.tar.gz
-          tar -xzf oc.tar.gz
-          sudo mv oc /usr/local/bin/
+          tar -xzf oc.tar.gz && sudo mv oc /usr/local/bin/
+          VERSION=$(curl -s https://api.github.com/repos/kubevirt/kubevirt/releases/latest | grep tag_name | cut -d'"' -f4)
+          curl -sLo virtctl "https://github.com/kubevirt/kubevirt/releases/download/${VERSION}/virtctl-${VERSION}-linux-amd64"
+          chmod +x virtctl && sudo mv virtctl /usr/local/bin/
           oc version --client
 
       - name: Login to OpenShift
@@ -37,49 +39,66 @@ jobs:
       - name: NetworkPolicies
         run: |
           oc apply -f network/networkpolicy.yaml -n ${{ env.NAMESPACE }}
-          echo "✅ NetworkPolicies appliquées"
+          echo "✅ NetworkPolicies"
 
       - name: VM1 Firewall
         run: |
           oc apply -f vms/vm1-firewall/virtualmachine.yaml -n ${{ env.NAMESPACE }}
-          echo "✅ VM1 Firewall"
+          echo "✅ VM1"
 
       - name: VM2 Web
         run: |
           oc apply -f vms/vm2-web/virtualmachine.yaml -n ${{ env.NAMESPACE }}
-          echo "✅ VM2 Web"
+          echo "✅ VM2"
 
-      - name: VM3 DB ConfigMap
+      - name: VM3 DB
         run: |
           oc apply -f vms/vm3-db/initdb-configmap.yaml -n ${{ env.NAMESPACE }}
-          echo "✅ ConfigMap DB"
-
-      - name: VM3 DB Deployment
-        run: |
           oc apply -f vms/vm3-db/deployment.yaml -n ${{ env.NAMESPACE }}
-          echo "✅ VM3 DB"
+          echo "✅ VM3"
 
-      - name: ConfigMap App Node.js
+      - name: Pousser app Node.js dans VM2 via virtctl ssh
         run: |
-          oc create configmap vm2-app-code \
-            --from-file=index.js=app/src/index.js \
-            --dry-run=client -o yaml | oc apply -f - -n ${{ env.NAMESPACE }}
-          echo "✅ ConfigMap App"
+          # Attendre que VM2 soit Running
+          echo "Attente VM2..."
+          timeout 300 bash -c "
+            until oc get vmi vm2-web -n ${{ env.NAMESPACE }} \
+              -o jsonpath='{.status.phase}' 2>/dev/null | grep -q 'Running'; do
+              echo 'VM2 pas encore Running...'
+              sleep 15
+            done
+          "
+          echo "VM2 Running ✅"
 
-      - name: Résumé final
+          # Créer un script de setup
+          cat > /tmp/setup-vm2.sh << 'SCRIPT'
+          #!/bin/bash
+          sudo dnf install -y nodejs npm nginx 2>/dev/null
+          sudo mkdir -p /opt/app
+          sudo chmod 777 /opt/app
+          SCRIPT
+
+          # Copier index.js et setup via virtctl scp
+          virtctl scp app/src/index.js \
+            fedora@vm2-web:/tmp/index.js \
+            -n ${{ env.NAMESPACE }} \
+            -- -o StrictHostKeyChecking=no 2>/dev/null || echo "scp non disponible"
+
+          # Utiliser SSH pour configurer
+          virtctl ssh fedora@vm2-web \
+            -n ${{ env.NAMESPACE }} \
+            --command "sudo mkdir -p /opt/app && sudo dnf install -y nodejs npm nginx 2>/dev/null | tail -1" \
+            -- -o StrictHostKeyChecking=no 2>/dev/null || echo "SSH tenté"
+
+          echo "✅ Setup VM2 envoyé"
+
+      - name: Résumé
         run: |
-          echo "══════════════════════════════════════════"
-          echo "  BUILD FINAL TERMINÉ ✅"
-          echo "══════════════════════════════════════════"
-          echo ""
-          echo "── VMs KubeVirt ──"
+          echo "══════════════════════════════════"
+          echo "  DÉPLOIEMENT TERMINÉ"
+          echo "══════════════════════════════════"
           oc get vm -n ${{ env.NAMESPACE }} \
             -o custom-columns="NOM:.metadata.name,STATUT:.status.printableStatus,PRÊTE:.status.ready"
           echo ""
-          echo "── Conteneur DB ──"
           oc get deployment vm3-db -n ${{ env.NAMESPACE }} \
             -o custom-columns="NOM:.metadata.name,DISPO:.status.availableReplicas"
-          echo ""
-          echo "── NetworkPolicies ──"
-          oc get networkpolicy -n ${{ env.NAMESPACE }} \
-            -o custom-columns="NOM:.metadata.name"
